@@ -1,7 +1,7 @@
 // Le lecteur natif de SmartTeacher dans le navigateur : qtpy6web.preparer charge Pyodide-Qt, lecteur.zip (le lecteur, qtpy6,
 // qtpy6web, les polices : construire.py) et la roue WebAssembly de serializejson ; pont_qt fait le reste. Tout ce que ce module
 // charge est à côté de LUI (import.meta.url) : en développement le dossier pyqt6/, déployé l'hôte statique où deployer.sh copie
-// ces fichiers, d'où la page servie par Google l'importe (page.html, HOTE), avec une version en requête (« ?v=… ») reportée
+// ces fichiers, avec la page (index.html, dérivée de page.html : HOTE), avec une version en requête (« ?v=… ») reportée
 // sur chaque fichier pour passer le cache du CDN, sauf la roue : Pyodide n'accepte qu'une adresse qui FINIT par .whl (il y lit
 // le nom du paquet ; avec une requête, « No known package with name », mesuré en ligne le 26/09/2026), et ce fichier ne change
 // qu'avec serializejson. print et rendu sont ceux de qtpy6web (window.journal).
