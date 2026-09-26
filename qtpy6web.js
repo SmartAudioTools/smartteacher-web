@@ -9,7 +9,8 @@
 // `archives` : [{url, dossier}], des zip dépaquetés dans le système de fichiers de Pyodide et mis dans sys.path (le code
 // de l'application, qtpy6, qtpy6web, ses données, ses polices : qtpy6web.assembler les construit). `roues` : des roues
 // WebAssembly (.whl) chargées par URL, pour les extensions compilées (le lock de Pyodide-Qt est vide : ni loadPackage("nom")
-// ni micropip). `env` : des variables d'environnement, QT_API=pyqt6 par défaut. `sur_ligne` : reçoit chaque ligne du
+// ni micropip) ; une adresse qui FINIT par .whl, sans requête « ?v=… » : Pyodide y lit le nom du paquet (uriToPackageData),
+// et répond « No known package with name » sinon. `env` : des variables d'environnement, QT_API=pyqt6 par défaut. `sur_ligne` : reçoit chaque ligne du
 // journal (print), qui va aussi dans window.journal (ce que lit qtpy6web.sonde) et la console.
 const t0 = performance.now();
 export const journal = [];
@@ -39,7 +40,10 @@ export async function preparer(conteneur, { indexURL, archives = [], roues = [],
     print(`attention : Pyodide-Qt ${py.version} là où qtpy6web attend ${versions.pyodide_qt.version} (roues ${versions.pyodide_qt.abi})`);
   archives.forEach((a, i) => py.unpackArchive(donnees[i], "zip", { extractDir: a.dossier }));
   // loadPackage, et non unpackArchive, pour une roue : il précharge ses .so de façon asynchrone
-  for (const roue of roues) await py.loadPackage(new URL(roue, location.href).href);
+  for (const roue of roues) {
+    if (!roue.endsWith(".whl")) throw new Error(`roue ${roue} : l'adresse doit finir par .whl (pas de requête), Pyodide y lit le nom du paquet`);
+    await py.loadPackage(new URL(roue, location.href).href);
+  }
   py._module.qtContainerElements = [conteneur];  // l'API privée de Qt-WASM, isolée ici : l'élément qui sert d'écran à Qt
   py.runPython(`import json, os, sys
 os.environ.update(json.loads(${JSON.stringify(JSON.stringify(env))}))
