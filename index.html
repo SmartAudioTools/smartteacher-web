@@ -39,33 +39,23 @@
 <script type="module">
 // Le lecteur natif (PyQt6) dans le navigateur, accueil compris : nom, prénom et code de déverrouillage sont demandés par
 // la boîte du lecteur lui-même (lecteur.Accueil), dans le canevas, la même qu'en natif. La page charge Pyodide, fournit le
-// sujet et, déployée (API : l'application web Apps Script du professeur, Code.gs), fait passer les copies (pont_qt) :
-//   ?sujet=x.qcm : le sujet à côté de la page, ou dans le dossier Drive du professeur (sinon l'élève choisit le fichier) ;
+// sujet et, déployée (DROPBOX : le dossier d'application Dropbox du professeur, dropbox.js), fait passer les copies (pont_qt) :
+//   ?sujet=x.qcm : le sujet à côté de la page, ou dans le dossier Dropbox du professeur (sinon l'élève choisit le fichier) ;
 //   ?eleve=Nom Prénom : l'épreuve commence sans passer par l'accueil (la sonde, l'essai de déploiement).
 // window.etat : "en cours", puis "accueil", "epreuve" ou "erreur" (ce que lit qtpy6web.sonde) ; window.envoi : {date} du
 // dernier envoi réussi ; window.py : Pyodide (essai_deploiement.py).
 // Les cinq constantes : les valeurs locales ici (développement, sonde) ; construire.py --hote écrit dans pyqt6/index.html, la
 // page que deployer.sh publie sur l'hôte statique, les adresses déployées, une par ligne, telles quelles : Pyodide-Qt publié par
 // qtpy6web, le Pyodide ordinaire des workers sur jsdelivr, l'hôte statique (où sont lecteur_qt.js et ce qu'il charge), la
-// version ajoutée en requête, et l'application web Apps Script (celle qui finit par /exec).
+// version ajoutée en requête, et la clé du dossier Dropbox du professeur (dropbox.js).
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6web/pyodide-qt/";
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1790440940";
-const API = "https://script.google.com/macros/s/AKfycbyLzPcHZ7_AKjzKjoef0piezP1rDQEpkAX445u0uJ2R0D9rg7S3_EN9P-_G6w9V469x/exec";
+const VERSION = "?v=1790443883";
+const DROPBOX = "MmxvMXBxMjdsMTc4NjhmIGJBd1phLUlZeVJBQUFBQUFBQUFBQWRHUWRMcFlNanNUaXlsUGNjcnI0ZlV4RXp2R0xvOEdoZ29NQ1VhZGxEdXg=";
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
 const $ = s => document.querySelector(s);
-// Une fonction de Code.gs (doPost), par une requête ordinaire : sans en-tête Content-Type, le navigateur l'envoie sans
-// requête préalable, et la réponse d'Apps Script (après sa redirection) autorise toutes les origines.
-async function appel(fonction, ...args) {
-  const reponse = await fetch(API, { method: "POST", body: JSON.stringify({ fonction, args }) });
-  if (!reponse.ok) throw new Error(`${fonction} : ${reponse.status}`);
-  const { valeur, erreur } = await reponse.json();
-  if (erreur) throw new Error(erreur);
-  return valeur;
-}
-const octets = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 
 function message(texte, erreur = false) {
   $("#message").textContent = texte;
@@ -77,15 +67,16 @@ $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne l
 try {
   const { preparer, lancer, print, rendu } = await import(HOTE + "lecteur_qt.js" + VERSION);
   // Ce que la page offre au pont (pont_qt.demarrer) : le lien de la copie, l'état pour la sonde, une ligne de statut pour
-  // l'élève, et chez le professeur la copie qui part et qui revient (Code.gs : deposer, reprendre).
+  // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : deposer, reprendre).
   const page = {
     lien: $("#telecharger"),
     etat: async e => { await rendu(); print(`${e} : canevas ${$("#qt").clientWidth} x ${$("#qt").clientHeight}`); window.etat = e; },
     statut: (texte, erreur = false) => { $("#statut").textContent = texte; $("#statut").classList.toggle("erreur", erreur); print(texte); },
   };
-  if (API) Object.assign(page, {
-    reprendre: (titre, eleve, empreinte) => appel("reprendre", titre, eleve, empreinte),
-    deposer: async resume => { const date = Date.now(); await appel("deposer", JSON.parse(resume)); window.envoi = { date }; },
+  const prof = DROPBOX && (await import(HOTE + "dropbox.js" + VERSION)).professeur(DROPBOX);
+  if (prof) Object.assign(page, {
+    reprendre: prof.reprendre,
+    deposer: async resume => { const date = Date.now(); await prof.deposer(JSON.parse(resume)); window.envoi = { date }; },
   });
   const commencer = octets => {
     $("#accueil").hidden = true;
@@ -95,8 +86,8 @@ try {
   const sujet = params.get("sujet");
   $("#ligne-fichier").hidden = !!sujet;
   window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE });
-  if (sujet && API) {
-    commencer(octets(await appel("fichier", sujet)));
+  if (sujet && prof) {
+    commencer(await prof.fichier(sujet));
   } else if (sujet) {
     const reponse = await fetch(sujet);
     if (!reponse.ok) throw new Error(`${sujet} introuvable (${reponse.status})`);
