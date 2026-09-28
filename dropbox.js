@@ -2,15 +2,14 @@
 // directement depuis le navigateur (API HTTP de Dropbox, qui accepte toutes les origines). Ce dossier est synchronisé sur son
 // disque par son client Dropbox, comme le reste de son Dropbox (Applications/<nom de l'application>/) :
 //   <x>.qcm                        un sujet, à la racine, tel qu'exporter_eleve le produit ;
-//   Copies/<titre> - <élève>.qcm   la copie d'un élève (le texte que le lecteur enregistre : pont_qt.resume) ;
-//   Copies/<titre> - <élève>.json  sa fiche : points, terminé ou non, date du dernier envoi, et l'empreinte du code personnel
-//                                  qui la garde (codes.empreinte) : plus aucune copie n'est acceptée ni rendue sous ce nom
-//                                  sans elle, et celle qu'un autre avait déposée à sa place, sans code, est mise de côté.
+//   Copies/…/<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui donne le pont
+//                                  (codes.chemin_copie) ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
+//                                  que le pont vérifie en la déchiffrant. Sa date est celle du serveur de Dropbox
+//                                  (server_modified), jamais celle de l'élève : c'est elle que dropbox_professeur.py compare
+//                                  à la date limite.
 // Les chemins de Dropbox ignorent la casse : « dupont jean » et « Dupont Jean » sont le même élève, comme ils doivent l'être.
 // La clé est dans la page, donc à qui sait la lire : elle ne donne accès qu'à ce dossier (application « App folder »), mais
 // à tout ce dossier. Choix de l'utilisateur, 26/09/2026, contre un relais qui l'aurait cachée (README, « Lecteur web »).
-
-const PROTEGEE = "ce nom est protégé par un code personnel : la copie n'est pas acceptée sans lui";
 
 // cle : ce que construire.py écrit dans la page (DROPBOX de deployer.conf), la clé de l'application et son jeton de
 // renouvellement, séparés d'une espace, en base64 : un jeton en clair sur GitHub serait révoqué par ses robots.
@@ -50,9 +49,10 @@ export function professeur(cle) {
     }
   }
   const lire = chemin => appel("files/download", { path: chemin });
-  const ecrire = (chemin, texte) => appel("files/upload", { path: chemin, mode: "overwrite", mute: true }, texte);
-  const nom = (titre, eleve) => "/Copies/" + `${titre} - ${eleve}`.replace(/[\\\/:*?"<>|]/g, "_");
-  const fiche = async chemin => { const r = await lire(chemin + ".json"); return r ? r.json() : {}; };
+  const copie = chemin => {  // le pont ne touche qu'aux copies
+    if (!/^\/Copies\/.+\.qcm$/.test(chemin) || chemin.includes("/../")) throw new Error("chemin refusé : " + chemin);
+    return chemin;
+  };
 
   return {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm de la racine, quel que soit le paramètre de la page.
@@ -63,25 +63,19 @@ export function professeur(cle) {
       return new Uint8Array(await r.arrayBuffer());
     },
 
-    // La copie d'un élève (r : pont_qt.resume, déjà lu) et sa fiche, remplacées.
-    async deposer({ copie, ...r }) {
-      const chemin = nom(r.titre, r.eleve), garde = (await fiche(chemin)).empreinte || "", empreinte = r.empreinte || "";
-      if (garde && garde !== empreinte) throw new Error(PROTEGEE);
-      if (!garde && empreinte)  // null si aucune copie n'a été déposée sans code
-        await appel("files/move_v2", { from_path: chemin + ".qcm", to_path: chemin + " (sans code).qcm", autorename: true });
-      await ecrire(chemin + ".qcm", copie);
-      await ecrire(chemin + ".json", JSON.stringify({ ...r, empreinte, date: Date.now() }, null, 1));
+    // Une copie (pont_qt.lire) : {copie (texte), date (ms, horloge de Dropbox)}, ou null.
+    async lire(chemin) {
+      const r = await lire(copie(chemin));
+      return r && { copie: await r.text(), date: Date.parse(JSON.parse(r.headers.get("Dropbox-API-Result")).server_modified) };
     },
 
-    // La copie déjà déposée par cet élève pour ce sujet, depuis n'importe quel appareil : {copie, date (ms)}, ou null ;
-    // {protegee: true} si sa fiche est gardée par une autre empreinte. Un élève qui donne son code pour la première fois ne
-    // reprend pas la copie déposée sans code : elle peut être celle d'un autre.
-    async reprendre(titre, eleve, empreinte = "") {
-      const chemin = nom(titre, eleve), f = await fiche(chemin), garde = f.empreinte || "";
-      if (garde && garde !== empreinte) return { protegee: true };
-      if (!garde && empreinte) return null;
-      const r = await lire(chemin + ".qcm");
-      return r && { copie: await r.text(), date: f.date || 0 };
+    // Une copie écrite ou remplacée : sa date (ms, horloge de Dropbox).
+    async ecrire(chemin, texte) {
+      const r = await appel("files/upload", { path: copie(chemin), mode: "overwrite", mute: true }, texte);
+      return Date.parse((await r.json()).server_modified);
     },
+
+    // Une copie mise de côté, un numéro ajouté si le nom est pris ; rien si elle n'existe pas.
+    deplacer: (de, vers) => appel("files/move_v2", { from_path: copie(de), to_path: copie(vers), autorename: true }),
   };
 }

@@ -22,6 +22,9 @@
   #epreuve[hidden] { display: flex !important; visibility: hidden; }
   #bandeau { margin: 0; padding: 2px 16px; min-height: 1.4em; font-size: .85em; color: #505050; }  /* hauteur fixe : le canevas ne bouge pas */
   #qt { flex: 1; min-height: 0; }
+  /* ?journal : le journal de la page par-dessus tout, pour voir sur un téléphone ce qui se passe sans outils de développement */
+  #journal { position: fixed; left: 0; right: 0; bottom: 0; max-height: 45vh; overflow: auto; margin: 0; padding: 4px 8px; z-index: 1;
+    background: #000c; color: #fff; font: 11px monospace; white-space: pre-wrap; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -36,26 +39,47 @@
   <p id="bandeau"><span id="statut"></span> <a id="telecharger" hidden>Télécharger ma copie</a></p>
   <div id="qt"></div>
 </main>
+<pre id="journal" hidden></pre>
 <script type="module">
 // Le lecteur natif (PyQt6) dans le navigateur, accueil compris : nom, prénom et code de déverrouillage sont demandés par
 // la boîte du lecteur lui-même (lecteur.Accueil), dans le canevas, la même qu'en natif. La page charge Pyodide, fournit le
 // sujet et, déployée (DROPBOX : le dossier d'application Dropbox du professeur, dropbox.js), fait passer les copies (pont_qt) :
 //   ?sujet=x.qcm : le sujet à côté de la page, ou dans le dossier Dropbox du professeur (sinon l'élève choisit le fichier) ;
 //   ?eleve=Nom Prénom : l'épreuve commence sans passer par l'accueil (la sonde, l'essai de déploiement).
-// window.etat : "en cours", puis "accueil", "epreuve" ou "erreur" (ce que lit qtpy6web.sonde) ; window.envoi : {date} du
+// window.etat : "en cours", puis "accueil", "epreuve" ou "erreur" (ce que lit qtpy6.web.sonde) ; window.envoi : {date, chemin} du
 // dernier envoi réussi ; window.py : Pyodide (essai_deploiement.py).
 // Les cinq constantes : les valeurs locales ici (développement, sonde) ; construire.py --hote écrit dans pyqt6/index.html, la
 // page que deployer.sh publie sur l'hôte statique, les adresses déployées, une par ligne, telles quelles : Pyodide-Qt publié par
-// qtpy6web, le Pyodide ordinaire des workers sur jsdelivr, l'hôte statique (où sont lecteur_qt.js et ce qu'il charge), la
+// qtpy6, le Pyodide ordinaire des workers sur jsdelivr, l'hôte statique (où sont lecteur_qt.js et ce qu'il charge), la
 // version ajoutée en requête, et la clé du dossier Dropbox du professeur (dropbox.js).
-const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6web/pyodide-qt/";
+const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1790445454";
+const VERSION = "?v=1790619428";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
 const $ = s => document.querySelector(s);
+
+// Une erreur : l'accueil revient au premier plan avec le message et la fin du journal (sans quoi une erreur levée une fois
+// l'épreuve montrée laissait un canevas blanc, sans rien à lire), et le journal s'affiche en entier.
+function echec(erreur) {
+  console.error(erreur);
+  $("#epreuve").hidden = true;
+  $("#accueil").hidden = false;
+  message("La page n'a pas pu se préparer : " + (erreur?.message ?? erreur), true);
+  $("#journal").hidden = false;
+  $("#journal").textContent = (window.journal || []).join("\n");
+  window.etat = "erreur";
+}
+// Les erreurs que personne n'attrape vont au journal seulement : une bénigne (boucle de ResizeObserver) cacherait une épreuve qui marche.
+function noter(m) {
+  const l = `non rattrapée : ${m}`;
+  window.journal?.push(l);
+  if (params.has("journal")) { $("#journal").hidden = false; $("#journal").textContent += l + "\n"; }
+}
+window.addEventListener("error", e => noter(e.error?.stack ?? e.message));
+window.addEventListener("unhandledrejection", e => noter(e.reason?.stack ?? e.reason));
 
 function message(texte, erreur = false) {
   $("#message").textContent = texte;
@@ -66,8 +90,9 @@ function message(texte, erreur = false) {
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
 try {
   const { preparer, lancer, print, rendu } = await import(HOTE + "lecteur_qt.js" + VERSION);
+  const sur_ligne = params.has("journal") ? l => { $("#journal").hidden = false; $("#journal").textContent += l + "\n"; } : undefined;
   // Ce que la page offre au pont (pont_qt.demarrer) : le lien de la copie, l'état pour la sonde, une ligne de statut pour
-  // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : deposer, reprendre).
+  // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : lire, ecrire, deplacer).
   const page = {
     lien: $("#telecharger"),
     etat: async e => { await rendu(); print(`${e} : canevas ${$("#qt").clientWidth} x ${$("#qt").clientHeight}`); window.etat = e; },
@@ -75,17 +100,18 @@ try {
   };
   const prof = DROPBOX && (await import(HOTE + "dropbox.js" + VERSION)).professeur(DROPBOX);
   if (prof) Object.assign(page, {
-    reprendre: prof.reprendre,
-    deposer: async resume => { const date = Date.now(); await prof.deposer(JSON.parse(resume)); window.envoi = { date }; },
+    lire: prof.lire,
+    ecrire: async (chemin, copie) => { const date = await prof.ecrire(chemin, copie); window.envoi = { date, chemin }; return date; },
+    deplacer: prof.deplacer,
   });
   const commencer = octets => {
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
-    lancer(octets, params.get("eleve"), page);
+    lancer(octets, params.get("eleve"), page, params.get("code"));
   };
   const sujet = params.get("sujet");
   $("#ligne-fichier").hidden = !!sujet;
-  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE });
+  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, sur_ligne });
   if (sujet && prof) {
     commencer(await prof.fichier(sujet));
   } else if (sujet) {
@@ -97,9 +123,7 @@ try {
     $("[name=fichier]").onchange = async e => commencer(new Uint8Array(await e.target.files[0].arrayBuffer()));
   }
 } catch (erreur) {
-  message("La page n'a pas pu se préparer : " + erreur.message, true);
-  console.error(erreur);
-  window.etat = "erreur";
+  echec(erreur);
 }
 </script>
 </body>
