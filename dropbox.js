@@ -1,9 +1,12 @@
 // Le professeur, vu de la page : le dossier d'application Dropbox où il dépose ses sujets et reçoit les copies, appelé
 // directement depuis le navigateur (API HTTP de Dropbox, qui accepte toutes les origines). Ce dossier est synchronisé sur son
 // disque par son client Dropbox, comme le reste de son Dropbox (Applications/<nom de l'application>/) :
-//   <x>.qcm                        un sujet, à la racine, tel qu'exporter_eleve le produit ;
-//   Copies/…/<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui donne le pont
-//                                  (codes.chemin_copie) ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
+//   Seconde/, Première/, Terminale/  un dossier par niveau, puis la même arborescence que les cours sur son disque
+//                                  (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
+//                                  dossier d'un sujet, QCM/<x>.qcm tel qu'exporter_eleve le produit et ses copies ;
+//   <x>.qcm                        un sujet hors de ces trois niveaux, à la racine, ses copies dans Copies/ à côté ;
+//   …/Copies/…/<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui donne le
+//                                  pont (codes.chemin_copie) ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
 //                                  que le pont vérifie en la déchiffrant. Sa date est celle du serveur de Dropbox
 //                                  (server_modified), jamais celle de l'élève : c'est elle que dropbox_professeur.py compare
 //                                  à la date limite.
@@ -49,18 +52,27 @@ export function professeur(cle) {
     }
   }
   const lire = chemin => appel("files/download", { path: chemin });
-  const copie = chemin => {  // le pont ne touche qu'aux copies
-    if (!/^\/Copies\/.+\.qcm$/.test(chemin) || chemin.includes("/../")) throw new Error("chemin refusé : " + chemin);
+  const NIVEAU = "(Seconde|Première|Terminale)/";
+  const sur = (motif, chemin) => {  // le chemin, s'il suit le motif sans détour par « .. »
+    if (!new RegExp(motif).test(chemin) || /(^|\/)\.\.?(\/|$)/.test(chemin)) throw new Error("chemin refusé : " + chemin);
     return chemin;
   };
+  const copie = chemin => sur(`^/(${NIVEAU}.+/)?Copies/.+\\.qcm$`, chemin);  // le pont ne touche qu'aux copies
 
   return {
-    // Un sujet du dossier, en octets : rien d'autre qu'un .qcm de la racine, quel que soit le paramètre de la page.
+    // Un sujet du dossier, en octets : rien d'autre qu'un .qcm de la racine ou d'un niveau, quel que soit le paramètre de la page.
     async fichier(sujet) {
-      if (!/^[^\/\\]+\.qcm$/.test(sujet)) throw new Error("sujet refusé : " + sujet);
-      const r = await lire("/" + sujet);
+      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.qcm$`, sujet));
       if (!r) throw new Error(sujet + " introuvable dans le dossier Dropbox du professeur");
       return new Uint8Array(await r.arrayBuffer());
+    },
+
+    // Un PDF du cours (pont_qt.cours_puis_afficher), ``chemin`` depuis le dossier du sujet : ses octets, ou null.
+    async cours(sujet, chemin) {
+      const parties = sujet.split("/").slice(0, -1);
+      for (const partie of chemin.split("/")) partie === ".." ? parties.pop() : partie !== "." && parties.push(partie);
+      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, parties.join("/")));
+      return r && new Uint8Array(await r.arrayBuffer());
     },
 
     // Une copie (pont_qt.lire) : {copie (texte), date (ms, horloge de Dropbox)}, ou null.

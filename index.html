@@ -55,7 +55,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1790683352";
+const VERSION = "?v=1790684644";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
@@ -92,7 +92,8 @@ try {
   const { preparer, lancer, print, rendu } = await import(HOTE + "lecteur_qt.js" + VERSION);
   const sur_ligne = params.has("journal") ? l => { $("#journal").hidden = false; $("#journal").textContent += l + "\n"; } : undefined;
   // Ce que la page offre au pont (pont_qt.demarrer) : le lien de la copie, l'état pour la sonde, une ligne de statut pour
-  // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : lire, ecrire, deplacer).
+  // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : lire, ecrire, deplacer) ; le cours, à côté du
+  // sujet (chez le professeur, ou par l'adresse du sujet).
   const page = {
     lien: $("#telecharger"),
     etat: async e => { await rendu(); print(`${e} : canevas ${$("#qt").clientWidth} x ${$("#qt").clientHeight}`); window.etat = e; },
@@ -110,6 +111,10 @@ try {
     lancer(octets, params.get("eleve"), page, params.get("code"));
   };
   const sujet = params.get("sujet");
+  if (sujet) page.cours = prof ? chemin => prof.cours(sujet, chemin) : async chemin => {
+    const reponse = await fetch(new URL(chemin, new URL(sujet, location.href)));
+    return reponse.ok ? new Uint8Array(await reponse.arrayBuffer()) : null;
+  };
   $("#ligne-fichier").hidden = !!sujet;
   window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, sur_ligne });
   if (sujet && prof) {
