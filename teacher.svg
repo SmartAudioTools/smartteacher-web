@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Chapeau de bachelier (mortarboard) en couleurs : toque noire, plateau carré vu en perspective, gland rouge.
+       Un liseré gris clair détache le noir sur un thème sombre. Étiré (groupe g) pour remplir le carré : 16 px dans un menu.
+       Lecteur, déploiement et clic droit de Dolphin ; le menu KDE garde plan_de_classe/menu/teacher-symbolic.svg. -->
+  <defs>
+    <linearGradient id="toque" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1b1b20"/><stop offset="0.5" stop-color="#34343c"/><stop offset="1" stop-color="#1b1b20"/>
+    </linearGradient>
+    <linearGradient id="plateau" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3c3c46"/><stop offset="1" stop-color="#1e1e24"/>
+    </linearGradient>
+    <linearGradient id="rouge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9e1b1b"/><stop offset="0.5" stop-color="#e8453c"/><stop offset="1" stop-color="#9e1b1b"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0.5 0.5) scale(1.06 1.30) translate(-2.3 -8.3)">
+  <path d="M15 29v12c0 4.5 7.6 8 17 8s17-3.5 17-8V29z" fill="url(#toque)" stroke="#8a8a96" stroke-width="1.6"/>
+  <path d="M32 9 61 23 32 37 3 23z" fill="url(#plateau)" stroke="#9a9aa6" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M32 23 53 27.5V42" fill="none" stroke="#c62828" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="32" cy="23" rx="3.2" ry="1.8" fill="#e8453c" stroke="#6e1010" stroke-width="0.8"/>
+  <rect x="51.2" y="40.5" width="3.6" height="3" rx="1" fill="#9e1b1b"/>
+  <path d="M51 43.5h4l2 12.5h-8z" fill="url(#rouge)" stroke="#6e1010" stroke-width="0.6" stroke-linejoin="round"/>
+  </g>
+</svg>
