@@ -13,9 +13,11 @@
   #identite label { display: grid; gap: 3px; }
   #identite input { font: inherit; padding: 4px; }
   #message { color: #707070; font-style: italic; min-height: 1.4em; }
-  #message.attente::after { content: ""; display: inline-block; width: .7em; height: .7em; margin-left: .4em; vertical-align: -.05em;
-    border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: tourner .8s linear infinite; }
-  @keyframes tourner { to { transform: rotate(360deg); } }
+  /* l'avancement (--p de 0 à 1, data-pourcent) : un camembert qui se remplit, puis le pourcentage ; les coins du carré où
+     se peint le dégradé conique sont couverts par un dégradé radial couleur du fond */
+  #message.attente::after { content: attr(data-pourcent); margin-left: .4em; padding-left: 1.4em; font-style: normal;
+    background: radial-gradient(circle at .55em 50%, transparent .5em, #fbfbfb .55em) left center / 1.1em 1.1em no-repeat,
+      conic-gradient(from 0deg at .55em 50%, currentColor calc(var(--p, 0) * 1turn), #dcdcdc 0) left center / 1.1em 1.1em no-repeat; }
   .erreur { color: #c0392b; font-style: normal; }
   /* Qt prend pour écran la taille du conteneur dès le chargement : l'épreuve, même cachée, occupe la fenêtre entière */
   #epreuve { position: fixed; inset: 0; display: flex; flex-direction: column; }
@@ -32,7 +34,7 @@
   <h1>SmartTeacher</h1>
   <form id="identite">
     <label id="ligne-fichier" hidden>Sujet <input type="file" name="fichier" accept=".qcm"></label>
-    <p id="message" class="attente">Préparation de la page…</p>
+    <p id="message" class="attente" data-pourcent="0 %">Préparation de la page…</p>
   </form>
 </section>
 <main id="epreuve" hidden>
@@ -55,7 +57,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1790859383";
+const VERSION = "?v=1790929358";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
@@ -88,8 +90,20 @@ function message(texte, erreur = false) {
 }
 
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
+// La page déployée confie à sw.js (le service worker) Pyodide-Qt et les fichiers de l'hôte qu'elle vient de charger : le QCM
+// suivant les aura sans aucune requête. Pas en développement (VERSION vide) : un cache y servirait des fichiers périmés.
+const sw = VERSION && navigator.serviceWorker;
+sw?.register(HOTE + "sw.js" + VERSION).catch(noter);
+function garder() {
+  if (!sw) return;
+  const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
+  const urls = performance.getEntriesByType("resource").map(r => r.name)
+    .filter(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json)(\?|$)/.test(u));  // pas les sujets ni les cours
+  sw.ready.then(r => r.active.postMessage(urls)).catch(noter);
+}
 try {
-  const { preparer, lancer, print, rendu } = await import(HOTE + "lecteur_qt.js" + VERSION);
+  const [{ preparer, lancer, print, rendu }, prof] = await Promise.all([import(HOTE + "lecteur_qt.js" + VERSION),
+    DROPBOX && import(HOTE + "dropbox.js" + VERSION).then(m => m.professeur(DROPBOX))]);
   const sur_ligne = params.has("journal") ? l => { $("#journal").hidden = false; $("#journal").textContent += l + "\n"; } : undefined;
   // Ce que la page offre au pont (pont_qt.demarrer) : le lien de la copie, l'état pour la sonde, une ligne de statut pour
   // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : lire, ecrire, deplacer) ; le cours, à côté du
@@ -99,7 +113,6 @@ try {
     etat: async e => { await rendu(); print(`${e} : canevas ${$("#qt").clientWidth} x ${$("#qt").clientHeight}`); window.etat = e; },
     statut: (texte, erreur = false) => { $("#statut").textContent = texte; $("#statut").classList.toggle("erreur", erreur); print(texte); },
   };
-  const prof = DROPBOX && (await import(HOTE + "dropbox.js" + VERSION)).professeur(DROPBOX);
   if (prof) Object.assign(page, {
     lire: prof.lire,
     ecrire: async (chemin, copie) => { const date = await prof.ecrire(chemin, copie); window.envoi = { date, chemin }; return date; },
@@ -116,13 +129,18 @@ try {
     return reponse.ok ? new Uint8Array(await reponse.arrayBuffer()) : null;
   };
   $("#ligne-fichier").hidden = !!sujet;
-  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, sur_ligne });
-  if (sujet && prof) {
-    commencer(await prof.fichier(sujet));
-  } else if (sujet) {
-    const reponse = await fetch(sujet);
+  // Le sujet se télécharge pendant que Pyodide-Qt se charge (chez le professeur : jeton puis fichier, deux allers-retours
+  // vers Dropbox) ; l'avancement de la préparation va jusqu'à 95 %, le sujet reçu fait le reste.
+  const octets = !sujet ? null : (prof ? prof.fichier(sujet) : fetch(sujet).then(async reponse => {
     if (!reponse.ok) throw new Error(`${sujet} introuvable (${reponse.status})`);
-    commencer(new Uint8Array(await reponse.arrayBuffer()));
+    return new Uint8Array(await reponse.arrayBuffer());
+  }));
+  octets?.catch(() => {});  // attendue plus bas : une erreur précoce n'est pas « non rattrapée »
+  const avancer = f => { $("#message").style.setProperty("--p", f); $("#message").dataset.pourcent = `${Math.floor(f * 100)} %`; };
+  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
+  garder();
+  if (sujet) {
+    commencer(await octets);
   } else {
     message("");
     $("[name=fichier]").onchange = async e => commencer(new Uint8Array(await e.target.files[0].arrayBuffer()));
