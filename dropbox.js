@@ -71,7 +71,8 @@ export function professeur(cle) {
     async cours(sujet, chemin) {
       const parties = sujet.split("/").slice(0, -1);
       for (const partie of chemin.split("/")) partie === ".." ? parties.pop() : partie !== "." && parties.push(partie);
-      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, parties.join("/")));
+      // les espaces en « _ », comme codes.en_ligne les a déposés : le .qcm cite son cours avec les noms du disque
+      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, parties.join("/").replaceAll(" ", "_")));
       return r && new Uint8Array(await r.arrayBuffer());
     },
 
