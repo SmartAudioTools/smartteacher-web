@@ -13,11 +13,15 @@
   #identite label { display: grid; gap: 3px; }
   #identite input { font: inherit; padding: 4px; }
   #message { color: #707070; font-style: italic; min-height: 1.4em; }
-  /* l'avancement (--p de 0 à 1, data-pourcent) : un camembert qui se remplit, puis le pourcentage ; les coins du carré où
-     se peint le dégradé conique sont couverts par un dégradé radial couleur du fond */
-  #message.attente::after { content: attr(data-pourcent); margin-left: .4em; padding-left: 1.4em; font-style: normal;
-    background: radial-gradient(circle at .55em 50%, transparent .5em, #fbfbfb .55em) left center / 1.1em 1.1em no-repeat,
-      conic-gradient(from 0deg at .55em 50%, currentColor calc(var(--p, 0) * 1turn), #dcdcdc 0) left center / 1.1em 1.1em no-repeat; }
+  /* l'avancement (--p de 0 à 1, data-pourcent) : sous le message, un grand camembert plein qui remplit un cercle vide, le
+     pourcentage au milieu (demande de l'utilisateur, 02/10/2026 : que l'élève le voie avancer même quand le pourcentage
+     reste figé ; au bord, 1 % ≈ 6 px). --p déclaré par @property pour glisser d'une valeur à la suivante au lieu de sauter. */
+  @property --p { syntax: "<number>"; inherits: true; initial-value: 0; }
+  #message.attente { transition: --p .6s linear; }
+  #message.attente::after { content: attr(data-pourcent); display: block; box-sizing: border-box; width: 180px; height: 180px;
+    margin: 20px auto 0; border: 2px solid #a0a0a0; border-radius: 50%; line-height: 176px; text-align: center;
+    font-size: 1.8em; font-style: normal; font-weight: bold; color: #202020; text-shadow: 0 0 4px #fff, 0 0 4px #fff, 0 0 2px #fff;
+    background: conic-gradient(#5b9be6 calc(var(--p) * 1turn), transparent 0); }
   .erreur { color: #c0392b; font-style: normal; }
   /* Qt prend pour écran la taille du conteneur dès le chargement : l'épreuve, même cachée, occupe la fenêtre entière */
   #epreuve { position: fixed; inset: 0; display: flex; flex-direction: column; }
@@ -57,7 +61,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1790929471";
+const VERSION = "?v=1790955865";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
@@ -92,13 +96,13 @@ function message(texte, erreur = false) {
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
 // La page déployée confie à sw.js (le service worker) Pyodide-Qt et les fichiers de l'hôte qu'elle vient de charger : le QCM
 // suivant les aura sans aucune requête. Pas en développement (VERSION vide) : un cache y servirait des fichiers périmés.
-const sw = VERSION && navigator.serviceWorker;
+const sw = VERSION ? navigator.serviceWorker : undefined;
 sw?.register(HOTE + "sw.js" + VERSION).catch(noter);
 function garder() {
   if (!sw) return;
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
   const urls = performance.getEntriesByType("resource").map(r => r.name)
-    .filter(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json)(\?|$)/.test(u));  // pas les sujets ni les cours
+    .filter(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
   sw.ready.then(r => r.active.postMessage(urls)).catch(noter);
 }
 try {

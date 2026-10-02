@@ -10,10 +10,17 @@ const CACHE = "smartteacher" + location.search;
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(cles => Promise.all(
   cles.filter(c => c.startsWith("smartteacher") && c !== CACHE).map(c => caches.delete(c))))));
+// Un jumeau Brotli (NOM.br, que qtpy6web.js demande à la place de NOM) est rangé DÉCOMPRESSÉ, marqué de l'en-tête que
+// qtpy6web.js reconnaît (DECOMPRESSE) : sinon la page le décompresserait à chaque ouverture (0,15 à 0,3 s pour le moteur).
 self.addEventListener("message", e => e.waitUntil(caches.open(CACHE).then(cache => Promise.all(e.data.map(async url => {
   if (await cache.match(url)) return;
-  const reponse = await fetch(url, { cache: "force-cache" });
-  if (reponse.ok) await cache.put(url, reponse);
+  let reponse = await fetch(url, { cache: "force-cache" });
+  if (!reponse.ok) return;
+  const nom = new URL(url).pathname;
+  if (nom.endsWith(".br"))
+    reponse = new Response(reponse.body.pipeThrough(new DecompressionStream("brotli")), { headers: {
+      "Content-Type": nom.endsWith(".wasm.br") ? "application/wasm" : "application/octet-stream", "X-Qtpy6-Decompresse": "1" } });
+  await cache.put(url, reponse);
 })))));
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;

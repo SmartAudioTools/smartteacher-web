@@ -6,11 +6,13 @@
 // le nom du paquet ; avec une requête, « No known package with name », mesuré en ligne le 26/09/2026), et ce fichier ne change
 // qu'avec serializejson. print et rendu sont ceux de qtpy6.web (window.journal). tailles.json (construire.py) : les octets des gros
 // fichiers, d'où l'avancement (``progres(fraction)`` de qtpy6web.js) ; s'il manque, le chargement se fait quand même.
+// Le canevas de chaque fenêtre Qt est créé avec willReadFrequently par qtpy6web.js (?lecture=0 pour comparer).
 const ICI = new URL(".", import.meta.url).href, VERSION = new URL(import.meta.url).search;
 const [{ preparer: preparer_qt, print, rendu }, tailles] = await Promise.all([import("./qtpy6web.js" + VERSION),
   fetch(ICI + "tailles.json" + VERSION).then(r => r.ok ? r.json() : {}).catch(() => ({}))]);
 export { print, rendu };
 let pont;
+const ROUE = "serializejson-0-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 
 // indexURL : où est Pyodide-Qt (36 Mo) ; pyodide : le Pyodide ORDINAIRE des workers des questions code. Par défaut les dossiers
 // locaux, relatifs à la page : ceux qu'on développe et que la sonde charge (pas de réseau). La page déployée passe les adresses
@@ -19,7 +21,8 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
   const py = await preparer_qt(conteneur, {
     indexURL,
     archives: [{ url: ICI + "lecteur.zip" + VERSION, dossier: "/lecteur" }],
-    roues: [ICI + "serializejson-0-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],  // sans VERSION, voir l'en-tête
+    brotli: ["lecteur.zip", ROUE],  // lecteur.zip.br et ROUE.br, à côté (construire.py)
+    roues: [ICI + ROUE],  // sans VERSION, voir l'en-tête
     sur_ligne,
     progres,
     tailles,

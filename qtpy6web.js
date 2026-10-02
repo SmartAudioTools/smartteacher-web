@@ -16,10 +16,24 @@
 // l'avancement de 0 à 1, les octets reçus de chaque fichier jusqu'à 0,9 (une copie de la réponse est lue à côté : celle que
 // Pyodide reçoit reste intacte, et le navigateur garde son cache de code compilé), puis dépaquetage, roues, 1 rendue. Le total
 // attendu : `tailles` ({nom: octets décompressés}, que la page connaît), compté dès le départ ; un fichier hors de `tailles` pèse
-// son Content-Length (juste s'il n'est pas compressé) une fois commencé. L'avancement ne recule jamais.
+// son Content-Length (juste s'il n'est pas compressé) une fois commencé. L'avancement ne recule jamais. `brotli` : les noms
+// (dernier segment de l'adresse) d'autres fichiers servis aussi compressés en Brotli (NOM.br), comme pyodide.asm.wasm et
+// python_stdlib.zip de Pyodide-Qt (hebergement/telecharger.sh) : voir `en_brotli`.
 const t0 = performance.now();
 export const journal = [];
 let ecouter = () => {};
+
+// Le canevas de chaque fenêtre Qt (qt-window-canvas) est créé avec willReadFrequently : tenu en mémoire et non sur la carte
+// graphique, il reçoit l'image que Qt-WASM envoie à chaque peinture (putImageData) en 1,5 ms au lieu de 8,3 à 1800 px
+// (Intel HD, mesuré par SmartTeacher le 02/10/2026). Les autres canevas (pdf.js) restent accélérés. ?lecture=0 dans
+// l'adresse rend le comportement d'origine, pour comparer.
+if (new URLSearchParams(location.search).get("lecture") !== "0") {
+  const getContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+    return getContext.call(this, type, type === "2d" && this.classList.contains("qt-window-canvas")
+                                        ? { ...attrs, willReadFrequently: true } : attrs);
+  };
+}
 
 export function print(m) {
   const l = `${((performance.now() - t0) / 1000).toFixed(2)}s ${m}`;
@@ -30,9 +44,29 @@ function telecharger(url) {
   return fetch(url).then(r => { if (!r.ok) throw new Error(`${url} : ${r.status}`); return r.arrayBuffer(); });
 }
 
+// Un fichier dont l'hôte sert un jumeau Brotli (NOM.br) : celui-ci est demandé d'abord, décompressé dans la page en flux
+// (DecompressionStream, qui ne retarde pas la compilation en flux du moteur). GitHub Pages ne compresse qu'en gzip : 11,3 Mo du
+// moteur, 8,0 en Brotli, soit 0,5 s de moins à 50 Mbit/s (mesuré le 02/10/2026 sous Firefox). Rend undefined, d'où la demande
+// du fichier lui-même, sans Brotli dans le navigateur (Firefox 155 l'a, sous le nom "brotli") ou sans jumeau (en
+// développement). Une réponse marquée DECOMPRESSE vient du service worker d'une page (celui de SmartTeacher), qui la range
+// décompressée : la décompresser à chaque ouverture coûterait 0,15 à 0,3 s de calcul.
+export const DECOMPRESSE = "X-Qtpy6-Decompresse";
+const BROTLI = (() => { try { new DecompressionStream("brotli"); return true; } catch { return false; } })();
+async function en_brotli(fetch_origine, adresse) {
+  if (!BROTLI) return;
+  const br = new URL(adresse);
+  br.pathname += ".br";
+  const reponse = await fetch_origine(br).catch(() => undefined);
+  if (!reponse?.ok) return;
+  if (reponse.headers.has(DECOMPRESSE)) return reponse;
+  return new Response(reponse.body.pipeThrough(new DecompressionStream("brotli")),  // application/wasm : compileStreaming l'exige
+    { headers: { "Content-Type": adresse.pathname.endsWith(".wasm") ? "application/wasm" : "application/octet-stream" } });
+}
+
 // Les octets reçus pendant `preparer` : chaque réponse de fetch lue en double (clone), son nom (dernier segment de l'adresse)
-// pesé par `tailles`. Rend la fonction qui remet le fetch d'origine.
-function compter(tailles, signaler) {
+// pesé par `tailles` ; et ceux de `brotli` demandés par en_brotli. Rend `prelancer(url)`, qui commence un téléchargement
+// tout de suite et le garde pour la première demande de la même adresse, et `retablir()`, qui remet le fetch d'origine.
+function compter(tailles, brotli, signaler) {
   const fetch_origine = window.fetch;
   const fichiers = Object.fromEntries(Object.entries(tailles).map(([nom, total]) => [nom, { recu: 0, total }]));
   let haut = 0;
@@ -41,10 +75,10 @@ function compter(tailles, signaler) {
     haut = Math.max(haut, f.reduce((s, x) => s + Math.min(x.recu, x.total), 0) / Math.max(1, f.reduce((s, x) => s + x.total, 0)));
     signaler(haut);
   };
-  window.fetch = async (...args) => {
-    const reponse = await fetch_origine(...args);
+  const obtenir = async (...args) => {
+    const adresse = new URL(String(args[0]?.url ?? args[0]), location.href), nom = adresse.pathname.split("/").pop();
+    const reponse = brotli.includes(nom) && await en_brotli(fetch_origine, adresse) || await fetch_origine(...args);
     if (!reponse.ok || !reponse.body) return reponse;
-    const nom = new URL(reponse.url || String(args[0]?.url ?? args[0]), location.href).pathname.split("/").pop();
     const fichier = fichiers[nom] = { recu: 0, total: tailles[nom] || +reponse.headers.get("Content-Length") || 1 };
     const lecteur = reponse.clone().body.getReader();
     (async () => {
@@ -53,7 +87,16 @@ function compter(tailles, signaler) {
     })().catch(() => {});
     return reponse;
   };
-  return () => { window.fetch = fetch_origine; };
+  const prelances = new Map();
+  window.fetch = (...args) => {
+    const adresse = new URL(String(args[0]?.url ?? args[0]), location.href).href, reponse = prelances.get(adresse);
+    prelances.delete(adresse);  // une seule fois : le corps d'une réponse ne se lit qu'une fois
+    return reponse || obtenir(...args);
+  };
+  return {
+    prelancer: url => { const p = obtenir(url); p.catch(() => {}); prelances.set(new URL(url, location.href).href, p); },
+    retablir: () => { window.fetch = fetch_origine; },
+  };
 }
 
 // La molette à la mesure du bureau. Qt-WASM fait d'un pixel du navigateur un angleDelta de 1 et d'une ligne 12 ; or un
@@ -76,11 +119,15 @@ function molette(conteneur) {
 }
 
 export async function preparer(conteneur, { indexURL, archives = [], roues = [], env = {}, sur_ligne, progres = () => {},
-                                            tailles = {} } = {}) {
+                                            tailles = {}, brotli = [] } = {}) {
   if (sur_ligne) ecouter = sur_ligne;
-  const retablir = compter(tailles, f => progres(0.9 * f));
+  const { prelancer, retablir } = compter(tailles, ["pyodide.asm.wasm", "python_stdlib.zip", ...brotli], f => progres(0.9 * f));
   window.journal = journal;
   indexURL = new URL(indexURL.endsWith("/") ? indexURL : indexURL + "/", location.href).href;
+  // Les gros fichiers demandés dès maintenant : sinon le moteur attendait pyodide.mjs puis pyodide.asm.js (1,2 Mo), deux
+  // allers-retours de plus, et chaque roue le démarrage entier de Pyodide. Pyodide et loadPackage les reçoivent ensuite.
+  ["pyodide.asm.wasm", "python_stdlib.zip"].forEach(n => prelancer(indexURL + n));
+  roues.forEach(r => prelancer(r));
   const attendu = fetch(new URL("../versions.json", import.meta.url)).then(r => r.ok ? r.json() : null).catch(() => null);
   const zips = archives.map(a => telecharger(a.url));  // en parallèle du chargement de Pyodide
   const { loadPyodide } = await import(indexURL + "pyodide.mjs");
@@ -89,7 +136,6 @@ export async function preparer(conteneur, { indexURL, archives = [], roues = [],
   const versions = await attendu;
   if (versions && versions.pyodide_qt.version !== py.version)
     print(`attention : Pyodide-Qt ${py.version} là où qtpy6.web attend ${versions.pyodide_qt.version} (roues ${versions.pyodide_qt.abi})`);
-  retablir();
   archives.forEach((a, i) => py.unpackArchive(donnees[i], "zip", { extractDir: a.dossier }));
   progres(0.93);
   // loadPackage, et non unpackArchive, pour une roue : il précharge ses .so de façon asynchrone
@@ -97,6 +143,7 @@ export async function preparer(conteneur, { indexURL, archives = [], roues = [],
     if (!roue.endsWith(".whl")) throw new Error(`roue ${roue} : l'adresse doit finir par .whl (pas de requête), Pyodide y lit le nom du paquet`);
     await py.loadPackage(new URL(roue, location.href).href);
   }
+  retablir();
   progres(0.97);
   py._module.qtContainerElements = [conteneur];  // l'API privée de Qt-WASM, isolée ici : l'élément qui sert d'écran à Qt
   molette(conteneur);
