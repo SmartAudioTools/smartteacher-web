@@ -1,8 +1,8 @@
 // Le professeur, vu de la page : le dossier d'application Dropbox où il dépose ses sujets et reçoit les copies, appelé
 // directement depuis le navigateur (API HTTP de Dropbox, qui accepte toutes les origines). Ce dossier est synchronisé sur son
 // disque par son client Dropbox, comme le reste de son Dropbox (Applications/<nom de l'application>/) :
-//   Seconde/, Première/, Terminale/  un dossier par niveau, puis la même arborescence que les cours sur son disque
-//                                  (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
+//   Seconde/, Premiere/, Terminale/  un dossier par niveau, puis la même arborescence que les cours sur son disque, en
+//                                  ASCII (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
 //                                  dossier d'un sujet, QCM/<x>.qcm tel qu'exporter_eleve le produit et ses copies ;
 //   <x>.qcm                        un sujet hors de ces trois niveaux, à la racine, ses copies dans Copies/ à côté ;
 //   …/Copies/…/<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui donne le

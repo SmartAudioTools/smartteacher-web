@@ -65,7 +65,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1791025390";
+const VERSION = "?v=1791025734";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
@@ -131,9 +131,7 @@ try {
     $("#epreuve").hidden = false;
     lancer(octets, params.get("eleve"), page, params.get("code"));
   };
-  // Une messagerie qui réencode le lien laisse des %XX dans le chemin (« …Python%2C_… » reçu sur un téléphone, 03/10/2026).
-  let sujet = params.get("sujet");
-  if (sujet && /%[0-9A-Fa-f]{2}/.test(sujet)) try { sujet = decodeURIComponent(sujet); } catch {}
+  const sujet = params.get("sujet");
   if (sujet) page.cours = prof ? chemin => prof.cours(sujet, chemin) : async chemin => {
     const reponse = await fetch(new URL(chemin, new URL(sujet, location.href)));
     return reponse.ok ? new Uint8Array(await reponse.arrayBuffer()) : null;
