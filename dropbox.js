@@ -16,6 +16,11 @@
 
 // cle : ce que construire.py écrit dans la page (DROPBOX de deployer.conf), la clé de l'application et son jeton de
 // renouvellement, séparés d'une espace, en base64 : un jeton en clair sur GitHub serait révoqué par ses robots.
+// codes.en_ascii, à l'identique (tests_modele : test_en_ascii les compare) : accents ôtés, « ° » en « o », tout autre signe
+// en un seul « _ », jamais en bord de nom.
+export const ascii = nom => nom.replaceAll("°", "o").replaceAll("œ", "oe").replaceAll("Œ", "OE").replaceAll("æ", "ae")
+  .normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9./-]+/g, "_").replace(/_(?=[./]|$)|(?<=\/)_|^_/g, "");
+
 export function professeur(cle) {
   const [client_id, refresh_token] = atob(cle).split(" ");
   let acces = null;  // le jeton d'accès, valable quatre heures : redemandé quand Dropbox le refuse
@@ -52,7 +57,7 @@ export function professeur(cle) {
     }
   }
   const lire = chemin => appel("files/download", { path: chemin });
-  const NIVEAU = "(Seconde|Première|Terminale)/";
+  const NIVEAU = "(Seconde|Premiere|Terminale)/";
   const sur = (motif, chemin) => {  // le chemin, s'il suit le motif sans détour par « .. »
     if (!new RegExp(motif).test(chemin) || /(^|\/)\.\.?(\/|$)/.test(chemin)) throw new Error("chemin refusé : " + chemin);
     return chemin;
@@ -71,8 +76,8 @@ export function professeur(cle) {
     async cours(sujet, chemin) {
       const parties = sujet.split("/").slice(0, -1);
       for (const partie of chemin.split("/")) partie === ".." ? parties.pop() : partie !== "." && parties.push(partie);
-      // les espaces en « _ », comme codes.en_ligne les a déposés : le .qcm cite son cours avec les noms du disque
-      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, parties.join("/").replaceAll(" ", "_")));
+      // en ASCII, comme codes.en_ligne les a déposés : le .qcm cite son cours avec les noms du disque
+      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, ascii(parties.join("/"))));
       return r && new Uint8Array(await r.arrayBuffer());
     },
 
