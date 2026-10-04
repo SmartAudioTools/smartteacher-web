@@ -21,7 +21,7 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
   const py = await preparer_qt(conteneur, {
     indexURL,
     archives: [{ url: ICI + "lecteur.zip" + VERSION, dossier: "/lecteur" }],
-    brotli: ["lecteur.zip", ROUE],  // lecteur.zip.br et ROUE.br, à côté (construire.py)
+    jumeaux: ["lecteur.zip", ROUE],  // leurs .br et .gz, à côté (construire.py)
     roues: [ICI + ROUE],  // sans VERSION, voir l'en-tête
     sur_ligne,
     progres,
