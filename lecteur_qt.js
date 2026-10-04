@@ -26,11 +26,10 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
     sur_ligne,
     progres,
     tailles,
+    module: "pont_qt",  // importé par preparer en rendant la main à la page : le cercle d'avancement continue de tourner
   });
-  const t = performance.now();
   pont = py.pyimport("pont_qt");
   pont.configurer(pyodide);
-  print(`lecteur importé en ${((performance.now() - t) / 1000).toFixed(2)} s`);
   return py;
 }
 
