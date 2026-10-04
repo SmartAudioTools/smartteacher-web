@@ -93,6 +93,12 @@ export function professeur(cle) {
       return Date.parse((await r.json()).server_modified);
     },
 
+    // Le témoin de présence de l'élève (pont_qt.envoyer_presence), à côté de sa copie : un petit JSON que le plan de classe du
+    // professeur lit par l'API Dropbox (plan_de_classe/suivi.py, longpoll). Jamais lu par la page.
+    async presence(chemin, texte) {
+      await appel("files/upload", { path: sur(`^/(${NIVEAU}.+/)?Copies/.+\\.etat\\.json$`, chemin), mode: "overwrite", mute: true }, texte);
+    },
+
     // Une copie mise de côté, un numéro ajouté si le nom est pris ; rien si elle n'existe pas.
     deplacer: (de, vers) => appel("files/move_v2", { from_path: copie(de), to_path: copie(vers), autorename: true }),
   };
