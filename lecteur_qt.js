@@ -11,6 +11,12 @@ const ICI = new URL(".", import.meta.url).href, VERSION = new URL(import.meta.ur
 const [{ preparer: preparer_qt, print, rendu }, tailles] = await Promise.all([import("./qtpy6web.js" + VERSION),
   fetch(ICI + "tailles.json" + VERSION).then(r => r.ok ? r.json() : {}).catch(() => ({}))]);
 export { print, rendu };
+// Qt (pyside_agrege.so) : l'enveloppe pyodide.mjs le demande par son jumeau, NOM.br ou NOM.gz selon ce que le navigateur
+// décompresse (même test qu'elle), NOM à défaut ; seule la taille de celui-là reste, sinon l'avancement des octets
+// attendrait un fichier jamais demandé
+const AGREGAT = "pyside_agrege.so" + ([[".br", "brotli"], [".gz", "gzip"]].find(([, format]) => {
+  try { new DecompressionStream(format); return true; } catch { return false; } })?.[0] ?? "");
+for (const ext of ["", ".br", ".gz"]) if ("pyside_agrege.so" + ext !== AGREGAT) delete tailles["pyside_agrege.so" + ext];
 let pont;
 const ROUE = "serializejson-0-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 
