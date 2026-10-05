@@ -14,10 +14,12 @@ export { print, rendu };
 let pont;
 const ROUE = "serializejson-0-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 
-// indexURL : où est Pyodide-Qt (36 Mo) ; pyodide : le Pyodide ORDINAIRE des workers des questions code. Par défaut les dossiers
-// locaux, relatifs à la page : ceux qu'on développe et que la sonde charge (pas de réseau). La page déployée passe les adresses
-// publiées (Pyodide-Qt par le dépôt qtpy6 sur GitHub Pages, le Pyodide ordinaire sur jsdelivr : construire.py).
-export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./pyodide-qt/", pyodide = "../node_modules/pyodide/" } = {}) {
+// indexURL : où est Pyodide-Qt (36 Mo) ; pyodide : le Pyodide des workers des questions code — le MÊME Pyodide-Qt
+// (05/10/2026 : un seul téléchargé) ; roues_pyodide : les .whl que ce Pyodide n'a pas et qu'un script d'élève peut importer
+// (sqlite3), chargés par le worker au premier import. Par défaut les dossiers locaux, relatifs à la page : ceux qu'on
+// développe et que la sonde charge (pas de réseau). La page déployée passe les adresses publiées (Pyodide-Qt par le dépôt
+// qtpy6 sur GitHub Pages : construire.py).
+export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./pyodide-qt/", pyodide = "./pyodide-qt/", roues_pyodide = [] } = {}) {
   const py = await preparer_qt(conteneur, {
     indexURL,
     archives: [{ url: ICI + "lecteur.zip" + VERSION, dossier: "/lecteur" }],
@@ -29,7 +31,7 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
     module: "pont_qt",  // importé par preparer en rendant la main à la page : le cercle d'avancement continue de tourner
   });
   pont = py.pyimport("pont_qt");
-  pont.configurer(pyodide);
+  pont.configurer(pyodide, roues_pyodide);
   return py;
 }
 

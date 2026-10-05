@@ -60,13 +60,17 @@
 // dernier envoi réussi ; window.py : Pyodide (essai_deploiement.py).
 // Les cinq constantes : les valeurs locales ici (développement, sonde) ; construire.py --hote écrit dans pyqt6/index.html, la
 // page que deployer.sh publie sur l'hôte statique, les adresses déployées, une par ligne, telles quelles : Pyodide-Qt publié par
-// qtpy6, le Pyodide ordinaire des workers sur jsdelivr, l'hôte statique (où sont lecteur_qt.js et ce qu'il charge), la
-// version ajoutée en requête, et la clé du dossier Dropbox du professeur (dropbox.js).
+// qtpy6 — pour la page ET pour les workers des questions code (un seul Pyodide téléchargé, 05/10/2026) —, l'hôte statique
+// (où sont lecteur_qt.js et ce qu'il charge), la version ajoutée en requête, et la clé du dossier Dropbox du professeur
+// (dropbox.js). ROUES_PYODIDE dérive de PYODIDE (pas de réécriture) : ce que Pyodide-Qt n'a pas et qu'un script d'élève
+// peut importer, chargé par le worker au premier import (travailleur de qtpy6.web) ; adresse finissant par .whl, sans
+// VERSION (en-tête de lecteur_qt.js).
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
-const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
+const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1791143471";
+const VERSION = "?v=1791185570";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
+const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
 const params = new URLSearchParams(location.search);
 const $ = s => document.querySelector(s);
@@ -100,8 +104,11 @@ function message(texte, erreur = false) {
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
 // La page déployée confie à sw.js (le service worker) Pyodide-Qt et les fichiers de l'hôte qu'elle vient de charger : le QCM
 // suivant les aura sans aucune requête. Pas en développement (VERSION vide) : un cache y servirait des fichiers périmés.
+// p=… : le préfixe du Pyodide des workers (le même Pyodide-Qt que la page, 05/10/2026), que sw.js range au premier ▶ et
+// sert aux workers neufs, jumeaux compris ; dans la requête d'enregistrement, donc dans le nom du cache : changer de
+// Pyodide repart sur un cache neuf.
 const sw = VERSION ? navigator.serviceWorker : undefined;
-sw?.register(HOTE + "sw.js" + VERSION).catch(noter);
+sw?.register(HOTE + "sw.js" + VERSION + "&p=" + encodeURIComponent(new URL(PYODIDE, location.href).href)).catch(noter);
 function garder() {
   if (!sw) return;
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
@@ -146,7 +153,7 @@ try {
   }));
   octets?.catch(() => {});  // attendue plus bas : une erreur précoce n'est pas « non rattrapée »
   const avancer = f => { $("#message").style.setProperty("--p", f); $("#message").dataset.pourcent = `${(Math.floor(f * 1000) / 10).toFixed(1).replace(".", ",")} %`; };
-  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
+  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, roues_pyodide: ROUES_PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
   garder();
   if (sujet) {
     commencer(await octets);
