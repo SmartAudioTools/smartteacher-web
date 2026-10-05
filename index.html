@@ -68,7 +68,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartaudiotools.github.io/smartteacher-web/";
-const VERSION = "?v=1791216379";
+const VERSION = "?v=1791225242";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -102,23 +102,16 @@ function message(texte, erreur = false) {
 }
 
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
-// La page déployée confie à sw.js (le service worker) Pyodide-Qt et les fichiers de l'hôte qu'elle vient de charger : le QCM
-// suivant les aura sans aucune requête. Pas en développement (VERSION vide) : un cache y servirait des fichiers périmés.
-// p=… : le préfixe du Pyodide des workers (le même Pyodide-Qt que la page, 05/10/2026), que sw.js range au premier ▶ et
-// sert aux workers neufs, jumeaux compris ; dans la requête d'enregistrement, donc dans le nom du cache : changer de
-// Pyodide repart sur un cache neuf.
-const sw = VERSION ? navigator.serviceWorker : undefined;
-sw?.register(HOTE + "sw.js" + VERSION + "&p=" + encodeURIComponent(new URL(PYODIDE, location.href).href)).catch(noter);
-function garder() {
-  if (!sw) return;
-  const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
-  const urls = performance.getEntriesByType("resource").map(r => r.name)
-    .filter(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
-  sw.ready.then(r => r.active?.postMessage(urls)).catch(noter);
-}
 try {
-  const [{ preparer, lancer, print, rendu }, prof] = await Promise.all([import(HOTE + "lecteur_qt.js" + VERSION),
+  const [{ preparer, lancer, print, rendu, service_worker }, prof] = await Promise.all([import(HOTE + "lecteur_qt.js" + VERSION),
     DROPBOX && import(HOTE + "dropbox.js" + VERSION).then(m => m.professeur(DROPBOX))]);
+  // La page déployée confie au service worker de qtpy6 (sw.js, déposé à côté par construire.py) Pyodide-Qt et les fichiers de
+  // l'hôte qu'elle vient de charger : le QCM suivant les aura sans aucune requête. Pas en développement (VERSION vide) : un
+  // cache y servirait des fichiers périmés. pyodide : le Pyodide des workers (le même Pyodide-Qt que la page), dont sw.js
+  // sert les fichiers bruts aux workers neufs depuis l'entrée de leur jumeau ; il est dans la requête d'enregistrement, donc
+  // dans le nom du cache : changer de Pyodide repart sur un cache neuf. « smartteacher » : le préfixe des caches de cette
+  // application, dont ceux d'avant le 05/10/2026 (« smartteacher?v=… »), effacés à l'activation.
+  const garder = VERSION ? service_worker(HOTE + "sw.js" + VERSION, { cache: "smartteacher", pyodide: PYODIDE, erreur: noter }) : () => {};
   const sur_ligne = params.has("journal") ? l => { $("#journal").hidden = false; $("#journal").textContent += l + "\n"; } : undefined;
   // Ce que la page offre au pont (pont_qt.demarrer) : le lien de la copie, l'état pour la sonde, une ligne de statut pour
   // l'élève, et chez le professeur la copie qui part et qui revient (dropbox.js : lire, ecrire, deplacer) ; le cours, à côté du
@@ -154,7 +147,8 @@ try {
   octets?.catch(() => {});  // attendue plus bas : une erreur précoce n'est pas « non rattrapée »
   const avancer = f => { $("#message").style.setProperty("--p", f); $("#message").dataset.pourcent = `${(Math.floor(f * 1000) / 10).toFixed(1).replace(".", ",")} %`; };
   window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, roues_pyodide: ROUES_PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
-  garder();
+  const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
+  garder(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
   if (sujet) {
     commencer(await octets);
   } else {

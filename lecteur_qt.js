@@ -4,13 +4,13 @@
 // ces fichiers, avec la page (index.html, dérivée de page.html : HOTE), avec une version en requête (« ?v=… ») reportée
 // sur chaque fichier pour passer le cache du CDN, sauf la roue : Pyodide n'accepte qu'une adresse qui FINIT par .whl (il y lit
 // le nom du paquet ; avec une requête, « No known package with name », mesuré en ligne le 26/09/2026), et ce fichier ne change
-// qu'avec serializejson. print et rendu sont ceux de qtpy6.web (window.journal). tailles.json (construire.py) : les octets des gros
-// fichiers, d'où l'avancement (``progres(fraction)`` de qtpy6web.js) ; s'il manque, le chargement se fait quand même.
+// qu'avec serializejson. print et rendu sont ceux de qtpy6.web (window.journal), service_worker aussi (page.html).
+// tailles.json (construire.py) : les octets des gros fichiers, d'où l'avancement (``progres(fraction)`` de qtpy6web.js) ; s'il manque, le chargement se fait quand même.
 // Le canevas de chaque fenêtre Qt est créé avec willReadFrequently par qtpy6web.js (?lecture=0 pour comparer).
 const ICI = new URL(".", import.meta.url).href, VERSION = new URL(import.meta.url).search;
-const [{ preparer: preparer_qt, print, rendu }, tailles] = await Promise.all([import("./qtpy6web.js" + VERSION),
+const [{ preparer: preparer_qt, print, rendu, service_worker }, tailles] = await Promise.all([import("./qtpy6web.js" + VERSION),
   fetch(ICI + "tailles.json" + VERSION).then(r => r.ok ? r.json() : {}).catch(() => ({}))]);
-export { print, rendu };
+export { print, rendu, service_worker };
 // Qt (pyside_agrege.so) : l'enveloppe pyodide.mjs le demande par son jumeau, NOM.br ou NOM.gz selon ce que le navigateur
 // décompresse (même test qu'elle), NOM à défaut ; seule la taille de celui-là reste, sinon l'avancement des octets
 // attendrait un fichier jamais demandé
