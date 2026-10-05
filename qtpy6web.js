@@ -232,6 +232,7 @@ function boucles_qt() {
   WebAssembly.instantiate = (b, imports) => i0(b, envelopper(imports));
   WebAssembly.instantiateStreaming = (r, imports) => is0(r, envelopper(imports));
   window.qtpy6Pomper = pompe;  // ce que bloquant._pyodide_pomper appelle, s'il le trouve
+  window.qtpy6Suspension = suspension;  // bloquant._plus_tard y dit qu'une tâche asyncio est promettante (Qt peut y suspendre)
 }
 
 // Un événement DOM que Qt met en file pendant une suspension est traité APRÈS sa diffusion : composedPath() rend alors []
@@ -271,7 +272,7 @@ function pompe(tour, periode) {
 function pomper(tour, periode) {
   let encours = false;
   const tourner = () => {
-    if (encours) return;
+    if (encours || suspension.suspendu) return;  // Qt suspendu (dans une tâche de bloquant._plus_tard) : sa boucle reprise traite les événements
     // Pas avant que Qt ait son contrôle de suspension (la première boucle d'événements) : appelée en promettante plus tôt,
     // Python meurt (« handle is undefined ») ; le tour ordinaire, comme sans boucles_qt.
     if (!(suspension.M && suspension.M.qtSuspendResumeControl)) return tour();
