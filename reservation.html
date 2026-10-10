@@ -10,6 +10,19 @@
 <style>html,body{height:100%;margin:0}iframe{display:block;width:100%;height:100%;border:0}</style>
 </head>
 <body>
-<iframe src="https://script.google.com/macros/s/AKfycbx1YhW7btLQNYPbTXz10k7chPFXGjCDoaoT2SFduRukQXy-ckxXCRhDggXD0nIk50AuxA/exec" title="Réservation des tours d'ordinateurs"></iframe>
+<!-- Cadre créé par le script à chaque affichage, adresse rendue unique : un cadre écrit dans le HTML est restauré par
+     Firefox (onglet déjà ouvert, retour arrière) sur l'adresse intérieure de Google, à usage unique et déjà périmée
+     → écran gris foncé (10/10/2026, téléphone). doGet ignore le paramètre v. -->
+<script>
+function ouvrir() {
+  document.querySelectorAll('iframe').forEach(f => f.remove());
+  const f = document.createElement('iframe');
+  f.title = "Réservation des tours d'ordinateurs";
+  f.src = 'https://script.google.com/macros/s/AKfycbx1YhW7btLQNYPbTXz10k7chPFXGjCDoaoT2SFduRukQXy-ckxXCRhDggXD0nIk50AuxA/exec?v=' + Date.now();
+  document.body.appendChild(f);
+}
+ouvrir();
+addEventListener('pageshow', e => { if (e.persisted) ouvrir(); }); // page reprise du cache de navigation
+</script>
 </body>
 </html>
