@@ -4,9 +4,9 @@
 //   Seconde/, Premiere/, Terminale/  un dossier par niveau, puis la même arborescence que les cours sur son disque, en
 //                                  ASCII (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
 //                                  dossier d'un sujet, QCM/<x>.qcm tel qu'exporter_eleve le produit et ses copies ;
-//   <x>.qcm                        un sujet hors de ces trois niveaux, à la racine, ses copies dans Copies/ à côté ;
-//   …/Copies/…/<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui donne le
-//                                  pont (codes.chemin_copie) ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
+//   <x>.qcm                        un sujet hors de ces trois niveaux, à la racine, ses copies à côté ;
+//   …/<sujet>/[<classe>/]<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui
+//                                  donne le pont (codes.chemin_copie), dans le dossier du sujet à côté de lui ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
 //                                  que le pont vérifie en la déchiffrant. Sa date est celle du serveur de Dropbox
 //                                  (server_modified), jamais celle de l'élève : c'est elle que dropbox_professeur.py compare
 //                                  à la date limite.
@@ -62,7 +62,10 @@ export function professeur(cle) {
     if (!new RegExp(motif).test(chemin) || /(^|\/)\.\.?(\/|$)/.test(chemin)) throw new Error("chemin refusé : " + chemin);
     return chemin;
   };
-  const copie = chemin => sur(`^/(${NIVEAU}.+/)?Copies/.+\\.qcm$`, chemin);  // le pont ne touche qu'aux copies
+  // Le pont ne touche qu'aux copies, « <sujet> [<élève>]… » (codes.est_copie) : jamais un sujet, dont le nom passé par
+  // en_ascii n'a ni espace ni crochet.
+  const COPIE = `^/([^/]+/)*[^/]+ \\[[^/]*\\][^/]*\\.`;
+  const copie = chemin => sur(COPIE + "qcm$", chemin);
 
   return {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm de la racine ou d'un niveau, quel que soit le paramètre de la page.
@@ -96,7 +99,7 @@ export function professeur(cle) {
     // Le témoin de présence de l'élève (pont_qt.envoyer_presence), à côté de sa copie : un petit JSON que le plan de classe du
     // professeur lit par l'API Dropbox (plan_de_classe/suivi.py, longpoll). Jamais lu par la page.
     async presence(chemin, texte) {
-      await appel("files/upload", { path: sur(`^/(${NIVEAU}.+/)?Copies/.+\\.etat\\.json$`, chemin), mode: "overwrite", mute: true }, texte);
+      await appel("files/upload", { path: sur(COPIE + "etat\\.json$", chemin), mode: "overwrite", mute: true }, texte);
     },
 
     // Une copie mise de côté, un numéro ajouté si le nom est pris ; rien si elle n'existe pas.
