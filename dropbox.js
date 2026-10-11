@@ -5,6 +5,9 @@
 //                                  ASCII (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
 //                                  dossier d'un sujet, QCM/<x>.qcm tel qu'exporter_eleve le produit et ses copies ;
 //   <x>.qcm                        un sujet hors de ces trois niveaux, à la racine, ses copies à côté ;
+//   <x>.erreurs.json               à côté du <x>.qcm de la page : les erreurs types que la correction automatique y ajoute pour toute
+//                                  la classe (erreurs_lire, erreurs_ecrire : les seules fonctions qui écrivent autre chose qu'une copie),
+//                                  relu avant chaque correction ; le professeur le fusionne dans ses banques (dropbox_professeur.py erreurs) ;
 //   …/<sujet>/[<classe>/]<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui
 //                                  donne le pont (codes.chemin_copie), dans le dossier du sujet à côté de lui ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
 //                                  que le pont vérifie en la déchiffrant. Sa date est celle du serveur de Dropbox
@@ -37,7 +40,8 @@ export function professeur(cle) {
 
   // Un appel de l'API : null si le fichier n'existe pas (409 …not_found…), la réponse sinon. En-tête Dropbox-API-Arg en ASCII
   // pur, comme Dropbox l'exige : les accents des noms d'élèves y passent en \uXXXX.
-  async function appel(route, arg, corps) {
+  // ``conflit`` : un 409 « conflict » (écriture sur une version périmée) rend aussi null.
+  async function appel(route, arg, corps, conflit = false) {
     const contenu = !route.startsWith("files/move");
     for (let essai = 0; ; essai++) {
       const entetes = { Authorization: "Bearer " + await jeton() };
@@ -52,7 +56,7 @@ export function professeur(cle) {
       if (r.status === 401 && !essai) { acces = null; continue; }
       if (r.ok) return r;
       const erreur = await r.text();
-      if (r.status === 409 && erreur.includes("not_found")) return null;
+      if (r.status === 409 && (erreur.includes("not_found") || conflit && erreur.includes("conflict"))) return null;
       throw new Error(`Dropbox ${route} : ${r.status} ${erreur.slice(0, 200)}`);
     }
   }
@@ -66,6 +70,8 @@ export function professeur(cle) {
   // en_ascii n'a ni espace ni crochet.
   const COPIE = `^/([^/]+/)*[^/]+ \\[[^/]*\\][^/]*\\.`;
   const copie = chemin => sur(COPIE + "qcm$", chemin);
+  // Le magasin d'erreurs d'un sujet : le chemin du sujet (.qcm, tel que ``fichier`` le reçoit) dont le .qcm devient .erreurs.json.
+  const magasin = sujet => sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.erreurs\\.json$`, sur(`\\.qcm$`, sujet).replace(/\.qcm$/, ".erreurs.json"));
 
   return {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm de la racine ou d'un niveau, quel que soit le paramètre de la page.
@@ -100,6 +106,19 @@ export function professeur(cle) {
     // professeur lit par l'API Dropbox (plan_de_classe/suivi.py, longpoll). Jamais lu par la page.
     async presence(chemin, texte) {
       await appel("files/upload", { path: sur(COPIE + "etat\\.json$", chemin), mode: "overwrite", mute: true }, texte);
+    },
+
+    // Le magasin d'erreurs types du sujet (``ReponseOuverte.magasin``) : {texte, rev}, ou null s'il n'existe pas encore.
+    async erreurs_lire(sujet) {
+      const r = await lire("/" + magasin(sujet));
+      return r && { texte: await r.text(), rev: JSON.parse(r.headers.get("Dropbox-API-Result")).rev };
+    },
+
+    // Le même, écrit sur la version ``rev`` (null : s'il n'existe pas encore) : {rev}, ou null si quelqu'un l'a changé depuis.
+    async erreurs_ecrire(sujet, texte, rev) {
+      const mode = rev ? { ".tag": "update", update: rev } : "add";
+      const r = await appel("files/upload", { path: "/" + magasin(sujet), mode, autorename: false, mute: true }, texte, true);
+      return r && { rev: (await r.json()).rev };
     },
 
     // Une copie mise de côté, un numéro ajouté si le nom est pris ; rien si elle n'existe pas.
