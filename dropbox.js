@@ -24,6 +24,11 @@
 export const ascii = nom => nom.replaceAll("°", "o").replaceAll("œ", "oe").replaceAll("Œ", "OE").replaceAll("æ", "ae")
   .normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9./-]+/g, "_").replace(/_(?=[./]|$)|(?<=\/)_|^_/g, "");
 
+// Le délai d'un appel, réponse lue comprise : un appel pendu (réseau du lycée, Dropbox muet) arrêtait sinon pour toujours
+// l'envoi de la copie et le témoin de présence, qui se suivent dans la même boucle (gel du TP01, 15/10/2026). Une minute
+// laisse passer une copie de 400 ko sur un réseau lent ; l'échec est dit à l'élève et l'envoi retenté au tour suivant.
+const DELAI = 60000;
+
 export function professeur(cle) {
   const [client_id, refresh_token] = atob(cle).split(" ");
   let acces = null;  // le jeton d'accès, valable quatre heures : redemandé quand Dropbox le refuse
@@ -31,7 +36,8 @@ export function professeur(cle) {
   async function jeton() {
     if (!acces) {
       const r = await fetch("https://api.dropboxapi.com/oauth2/token",
-                            { method: "POST", body: new URLSearchParams({ grant_type: "refresh_token", refresh_token, client_id }) });
+                            { method: "POST", body: new URLSearchParams({ grant_type: "refresh_token", refresh_token, client_id }),
+                              signal: AbortSignal.timeout(DELAI) });
       if (!r.ok) throw new Error(`Dropbox refuse la clé de la page (${r.status})`);
       acces = (await r.json()).access_token;
     }
@@ -52,7 +58,8 @@ export function professeur(cle) {
         entetes["Content-Type"] = "application/json";
         corps = JSON.stringify(arg);
       }
-      const r = await fetch(`https://${contenu ? "content" : "api"}.dropboxapi.com/2/${route}`, { method: "POST", headers: entetes, body: corps });
+      const r = await fetch(`https://${contenu ? "content" : "api"}.dropboxapi.com/2/${route}`, { method: "POST", headers: entetes, body: corps,
+                                                                                                  signal: AbortSignal.timeout(DELAI) });
       if (r.status === 401 && !essai) { acces = null; continue; }
       if (r.ok) return r;
       const erreur = await r.text();
