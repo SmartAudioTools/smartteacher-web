@@ -41,7 +41,7 @@
 <section id="accueil">
   <h1>SmartTeacher</h1>
   <form id="identite">
-    <label id="ligne-fichier" hidden>Sujet <input type="file" name="fichier" accept=".qcm"></label>
+    <label id="ligne-fichier" hidden>Sujet <input type="file" name="fichier" accept=".qcm,.report"></label>
     <p id="message" class="attente" data-pourcent="0 %">Préparation de la page…</p>
   </form>
 </section>
@@ -55,6 +55,7 @@
 // la boîte du lecteur lui-même (lecteur.Accueil), dans le canevas, la même qu'en natif. La page charge Pyodide, fournit le
 // sujet et, déployée (DROPBOX : le dossier d'application Dropbox du professeur, dropbox.js), fait passer les copies (pont_qt) :
 //   ?sujet=x.qcm : le sujet à côté de la page, ou dans le dossier Dropbox du professeur (sinon l'élève choisit le fichier) ;
+//     x.report : le bilan d'un élève (bilans.py fichiers), ouvert par son code personnel au lieu de l'épreuve ;
 //   ?eleve=Nom Prénom : l'épreuve commence sans passer par l'accueil (la sonde, l'essai de déploiement).
 // window.etat : "en cours", puis "accueil", "epreuve" ou "erreur" (ce que lit qtpy6.web.sonde) ; window.envoi : {date, chemin} du
 // dernier envoi réussi ; window.py : Pyodide (essai_deploiement.py).
@@ -68,7 +69,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1792426918";
+const VERSION = "?v=1792835531";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -127,10 +128,10 @@ try {
     deplacer: prof.deplacer,
     presence: prof.presence,
   });
-  const commencer = octets => {
+  const commencer = (octets, nom) => {
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
-    lancer(octets, params.get("eleve"), page, params.get("code"));
+    lancer(octets, params.get("eleve"), page, params.get("code"), nom);
   };
   const sujet = params.get("sujet");
   if (sujet) page.cours = prof ? chemin => prof.cours(sujet, chemin) : async chemin => {
@@ -150,10 +151,10 @@ try {
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
   garder(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
   if (sujet) {
-    commencer(await octets);
+    commencer(await octets, sujet);
   } else {
     message("");
-    $("[name=fichier]").onchange = async e => commencer(new Uint8Array(await e.target.files[0].arrayBuffer()));
+    $("[name=fichier]").onchange = async e => commencer(new Uint8Array(await e.target.files[0].arrayBuffer()), e.target.files[0].name);
   }
 } catch (erreur) {
   echec(erreur);

@@ -43,7 +43,8 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
 
 // Le sujet (octets d'un .qcm) : l'accueil du lecteur, ou l'épreuve si `eleve` (« Nom Prénom ») est connu et que le sujet
 // s'ouvre sans code. `page` : ce que la page offre au pont, lien de téléchargement, état, statut, copie chez le professeur
-// (pont_qt.demarrer). `jeton` : le code de la classe que porte le lien (?code=). Rend "accueil" ou "epreuve".
-export function lancer(octets, eleve, page = {}, jeton = "") {
-  return pont.demarrer(octets, eleve || "", page, jeton || "");
+// (pont_qt.demarrer). `jeton` : le code de la classe que porte le lien (?code=). `nom` : le nom du fichier, qui dit un
+// bilan d'élève (.report) plutôt qu'un sujet. Rend "accueil" ou "epreuve".
+export function lancer(octets, eleve, page = {}, jeton = "", nom = "") {
+  return pont.demarrer(octets, eleve || "", page, jeton || "", nom || "");
 }

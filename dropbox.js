@@ -81,9 +81,10 @@ export function professeur(cle) {
   const magasin = sujet => sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.erreurs\\.json$`, sur(`\\.qcm$`, sujet).replace(/\.qcm$/, ".erreurs.json"));
 
   return {
-    // Un sujet du dossier, en octets : rien d'autre qu'un .qcm de la racine ou d'un niveau, quel que soit le paramètre de la page.
+    // Un sujet du dossier, en octets : rien d'autre qu'un .qcm ou un bilan d'élève (.report, bilans.py fichiers) de la racine ou
+    // d'un niveau, quel que soit le paramètre de la page.
     async fichier(sujet) {
-      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.qcm$`, sujet));
+      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.(qcm|report)$`, sujet));
       if (!r) throw new Error(sujet + " introuvable dans le dossier Dropbox du professeur");
       return new Uint8Array(await r.arrayBuffer());
     },
