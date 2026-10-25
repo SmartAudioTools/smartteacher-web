@@ -69,7 +69,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1792921624";
+const VERSION = "?v=1792927506";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -127,6 +127,7 @@ try {
     ecrire: async (chemin, copie) => { const date = await prof.ecrire(chemin, copie); window.envoi = { date, chemin }; return date; },
     deplacer: prof.deplacer,
     presence: prof.presence,
+    fichier: prof.fichier,  // le bilan de l'année de l'élève (pont_qt.bilan_du_professeur)
   });
   const commencer = (octets, nom) => {
     $("#accueil").hidden = true;
