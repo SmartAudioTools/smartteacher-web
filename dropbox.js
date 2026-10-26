@@ -89,6 +89,13 @@ export function professeur(cle) {
       return new Uint8Array(await r.arrayBuffer());
     },
 
+    // Un des deux fichiers du tableau de bord d'une classe (tableau_eleves.py), à la racine : son texte, ou null s'il n'existe pas.
+    // echeances.csv sert aussi à l'accueil d'un sujet (page.html, pont_qt.demarrer) : il y gagne sur le code de la classe.
+    async racine(nom) {
+      const r = await lire("/" + sur("^(echeances\\.csv|tableau\\.json)$", nom));
+      return r && await r.text();
+    },
+
     // Un PDF du cours (pont_qt.cours_puis_afficher), ``chemin`` depuis le dossier du sujet : ses octets, ou null.
     async cours(sujet, chemin) {
       const parties = sujet.split("/").slice(0, -1);

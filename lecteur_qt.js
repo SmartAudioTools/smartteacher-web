@@ -17,7 +17,7 @@ export { print, rendu, service_worker };
 const AGREGAT = "pyside_agrege.so" + ([[".br", "brotli"], [".gz", "gzip"]].find(([, format]) => {
   try { new DecompressionStream(format); return true; } catch { return false; } })?.[0] ?? "");
 for (const ext of ["", ".br", ".gz"]) if ("pyside_agrege.so" + ext !== AGREGAT) delete tailles["pyside_agrege.so" + ext];
-let pont;
+let pont, py;
 const ROUE = "serializejson-0-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 
 // indexURL : où est Pyodide-Qt (36 Mo) ; pyodide : le Pyodide des workers des questions code — le MÊME Pyodide-Qt
@@ -26,7 +26,7 @@ const ROUE = "serializejson-0-cp313-cp313-pyemscripten_2025_0_wasm32.whl";
 // développe et que la sonde charge (pas de réseau). La page déployée passe les adresses publiées (Pyodide-Qt par le dépôt
 // qtpy6 sur GitHub Pages : construire.py).
 export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./pyodide-qt/", pyodide = "./pyodide-qt/", roues_pyodide = [] } = {}) {
-  const py = await preparer_qt(conteneur, {
+  py = await preparer_qt(conteneur, {
     indexURL,
     archives: [{ url: ICI + "lecteur.zip" + VERSION, dossier: "/lecteur" }],
     jumeaux: ["lecteur.zip", ROUE],  // leurs .br et .gz, à côté (construire.py)
@@ -47,4 +47,10 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
 // bilan d'élève (.report) plutôt qu'un sujet. Rend "accueil" ou "epreuve".
 export function lancer(octets, eleve, page = {}, jeton = "", nom = "") {
   return pont.demarrer(octets, eleve || "", page, jeton || "", nom || "");
+}
+
+// Le tableau de bord de la classe `classe` (?classe=) au lieu d'un sujet : pont_tableau.montrer, sur le texte des deux fichiers
+// du professeur (null : absent) ; `ouvrir(lien)` : un bouton pressé, le chemin du .qcm dans son dossier. Rend "tableau".
+export function tableau(classe, echeances, catalogue, ouvrir) {
+  return py.pyimport("pont_tableau").montrer(classe, echeances ?? "", catalogue ?? "", ouvrir);
 }

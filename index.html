@@ -55,6 +55,8 @@
 // la boîte du lecteur lui-même (lecteur.Accueil), dans le canevas, la même qu'en natif. La page charge Pyodide, fournit le
 // sujet et, déployée (DROPBOX : le dossier d'application Dropbox du professeur, dropbox.js), fait passer les copies (pont_qt) :
 //   ?sujet=x.qcm : le sujet à côté de la page, ou dans le dossier Dropbox du professeur (sinon l'élève choisit le fichier) ;
+//   ?classe=2nd 5 : le tableau de bord de la classe (tableau_eleves.py), chaque sujet prévu avec son bouton, qui rouvre la page
+//                   sur ?sujet= ; l'adresse fixe que l'élève met en favori ou en page d'accueil ;
 //     x.report : le bilan d'un élève (bilans.py fichiers), ouvert par son code personnel au lieu de l'épreuve ;
 //   ?eleve=Nom Prénom : l'épreuve commence sans passer par l'accueil (la sonde, l'essai de déploiement).
 // window.etat : "en cours", puis "accueil", "epreuve" ou "erreur" (ce que lit qtpy6.web.sonde) ; window.envoi : {date, chemin} du
@@ -69,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1792958212";
+const VERSION = "?v=1793003381";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -104,7 +106,7 @@ function message(texte, erreur = false) {
 
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
 try {
-  const [{ preparer, lancer, print, rendu, service_worker }, prof] = await Promise.all([import(HOTE + "lecteur_qt.js" + VERSION),
+  const [{ preparer, lancer, tableau, print, rendu, service_worker }, prof] = await Promise.all([import(HOTE + "lecteur_qt.js" + VERSION),
     DROPBOX && import(HOTE + "dropbox.js" + VERSION).then(m => m.professeur(DROPBOX))]);
   // La page déployée confie au service worker de qtpy6 (sw.js, déposé à côté par construire.py) Pyodide-Qt et les fichiers de
   // l'hôte qu'elle vient de charger : le QCM suivant les aura sans aucune requête. Pas en développement (VERSION vide) : un
@@ -129,17 +131,26 @@ try {
     presence: prof.presence,
     fichier: prof.fichier,  // le bilan de l'année de l'élève (pont_qt.bilan_du_professeur)
   });
-  const commencer = (octets, nom) => {
+  const commencer = async (octets, nom) => {
+    page.echeances = await echeances;
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
     lancer(octets, params.get("eleve"), page, params.get("code"), nom);
   };
-  const sujet = params.get("sujet");
+  const sujet = params.get("sujet"), classe = !sujet && params.get("classe");
+  // ?classe= : les deux fichiers du tableau, lus pendant que Pyodide-Qt se charge, chez le professeur (sans lui, à côté de la
+  // page) ; un fichier illisible vaut absent, le tableau le dit vide plutôt que de ne rien montrer
+  const texte = nom => (prof ? prof.racine(nom) : fetch(nom).then(r => r.ok ? r.text() : null)).catch(e => { noter(e); return null; });
+  const fichiers = classe && Promise.all([texte("echeances.csv"), texte("tableau.json")]);
+  // un sujet : le fichier d'échéances, lu lui aussi pendant le chargement, que l'accueil fait gagner sur le code (pont_qt.demarrer)
+  const echeances = !classe && texte("echeances.csv");
+  // relu pendant l'épreuve, et à l'échéance avant de rendre la copie (lecteur.Lecteur.relire) : une échéance repoussée y vaut
+  page.relire_echeances = () => texte("echeances.csv");
   if (sujet) page.cours = prof ? chemin => prof.cours(sujet, chemin) : async chemin => {
     const reponse = await fetch(new URL(chemin, new URL(sujet, location.href)));
     return reponse.ok ? new Uint8Array(await reponse.arrayBuffer()) : null;
   };
-  $("#ligne-fichier").hidden = !!sujet;
+  $("#ligne-fichier").hidden = !!(sujet || classe);
   // Le sujet se télécharge pendant que Pyodide-Qt se charge (chez le professeur : jeton puis fichier, deux allers-retours
   // vers Dropbox) ; l'avancement de la préparation va jusqu'à 95 %, le sujet reçu fait le reste.
   const octets = !sujet ? null : (prof ? prof.fichier(sujet) : fetch(sujet).then(async reponse => {
@@ -151,8 +162,14 @@ try {
   window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, roues_pyodide: ROUES_PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
   garder(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
-  if (sujet) {
-    commencer(await octets, sujet);
+  if (classe) {
+    $("#accueil").hidden = true;
+    $("#epreuve").hidden = false;
+    const ouvrir = lien => { const u = new URL(location.href); u.search = new URLSearchParams({ sujet: lien }); location.assign(u); };
+    tableau(classe, ...await fichiers, ouvrir);
+    await page.etat("tableau");
+  } else if (sujet) {
+    await commencer(await octets, sujet);
   } else {
     message("");
     $("[name=fichier]").onchange = async e => commencer(new Uint8Array(await e.target.files[0].arrayBuffer()), e.target.files[0].name);
