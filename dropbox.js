@@ -79,6 +79,7 @@ export function professeur(cle) {
   const copie = chemin => sur(COPIE + "qcm$", chemin);
   // Le magasin d'erreurs d'un sujet : le chemin du sujet (.qcm, tel que ``fichier`` le reçoit) dont le .qcm devient .erreurs.json.
   const magasin = sujet => sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.erreurs\\.json$`, sur(`\\.qcm$`, sujet).replace(/\.qcm$/, ".erreurs.json"));
+  const IDENTITES = "/identites.json";
 
   return {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm ou un bilan d'élève (.report, bilans.py fichiers) de la racine ou
@@ -133,6 +134,20 @@ export function professeur(cle) {
     async erreurs_ecrire(sujet, texte, rev) {
       const mode = rev ? { ".tag": "update", update: rev } : "add";
       const r = await appel("files/upload", { path: "/" + magasin(sujet), mode, autorename: false, mute: true }, texte, true);
+      return r && { rev: (await r.json()).rev };
+    },
+
+    // Le fichier d'empreintes des élèves (codes.IDENTITES), à la racine : {texte, rev}, ou null s'il n'existe pas encore. Une
+    // première visite y ajoute la sienne (pont_qt.deposer_identite) ; le professeur le scelle chez lui (codes.sceller).
+    async identites_lire() {
+      const r = await lire(IDENTITES);
+      return r && { texte: await r.text(), rev: JSON.parse(r.headers.get("Dropbox-API-Result")).rev };
+    },
+
+    // Le même, écrit sur la version ``rev`` (null : s'il n'existe pas encore) : {rev}, ou null si quelqu'un l'a changé depuis.
+    async identites_ecrire(texte, rev) {
+      const mode = rev ? { ".tag": "update", update: rev } : "add";
+      const r = await appel("files/upload", { path: IDENTITES, mode, autorename: false, mute: true }, texte, true);
       return r && { rev: (await r.json()).rev };
     },
 

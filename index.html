@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1793003381";
+const VERSION = "?v=1793638767";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -130,9 +130,12 @@ try {
     deplacer: prof.deplacer,
     presence: prof.presence,
     fichier: prof.fichier,  // le bilan de l'année de l'élève (pont_qt.bilan_du_professeur)
+    identites_lire: prof.identites_lire,
+    identites_ecrire: prof.identites_ecrire,
   });
   const commencer = async (octets, nom) => {
     page.echeances = await echeances;
+    page.identites = (await identites) || null;
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
     lancer(octets, params.get("eleve"), page, params.get("code"), nom);
@@ -141,9 +144,13 @@ try {
   // ?classe= : les deux fichiers du tableau, lus pendant que Pyodide-Qt se charge, chez le professeur (sans lui, à côté de la
   // page) ; un fichier illisible vaut absent, le tableau le dit vide plutôt que de ne rien montrer
   const texte = nom => (prof ? prof.racine(nom) : fetch(nom).then(r => r.ok ? r.text() : null)).catch(e => { noter(e); return null; });
-  const fichiers = classe && Promise.all([texte("echeances.csv"), texte("tableau.json")]);
+  const fichiers = classe && Promise.all([texte("echeances.csv"), texte("tableau.json"),
+    prof && prof.identites_lire().catch(e => { noter(e); return null; })]);
   // un sujet : le fichier d'échéances, lu lui aussi pendant le chargement, que l'accueil fait gagner sur le code (pont_qt.demarrer)
   const echeances = !classe && texte("echeances.csv");
+  // et le fichier d'empreintes, où l'accueil reconnaît l'élève à son mot de passe (lecteur.Accueil.identifier ; le tableau
+  // le lit avec ses deux fichiers)
+  const identites = !classe && prof && prof.identites_lire().catch(e => { noter(e); return null; });
   // relu pendant l'épreuve, et à l'échéance avant de rendre la copie (lecteur.Lecteur.relire) : une échéance repoussée y vaut
   page.relire_echeances = () => texte("echeances.csv");
   if (sujet) page.cours = prof ? chemin => prof.cours(sujet, chemin) : async chemin => {
@@ -166,7 +173,8 @@ try {
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
     const ouvrir = lien => { const u = new URL(location.href); u.search = new URLSearchParams({ sujet: lien }); location.assign(u); };
-    tableau(classe, ...await fichiers, ouvrir);
+    const [echeances_classe, catalogue, empreintes] = await fichiers;
+    tableau(classe, echeances_classe, catalogue, ouvrir, empreintes || null, prof || null);
     await page.etat("tableau");
   } else if (sujet) {
     await commencer(await octets, sujet);

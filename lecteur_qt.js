@@ -50,7 +50,9 @@ export function lancer(octets, eleve, page = {}, jeton = "", nom = "") {
 }
 
 // Le tableau de bord de la classe `classe` (?classe=) au lieu d'un sujet : pont_tableau.montrer, sur le texte des deux fichiers
-// du professeur (null : absent) ; `ouvrir(lien)` : un bouton pressé, le chemin du .qcm dans son dossier. Rend "tableau".
-export function tableau(classe, echeances, catalogue, ouvrir) {
-  return py.pyimport("pont_tableau").montrer(classe, echeances ?? "", catalogue ?? "", ouvrir);
+// du professeur (null : absent) ; `ouvrir(lien)` : un bouton pressé, le chemin du .qcm dans son dossier ; `identites` : le
+// fichier d'empreintes lu ({texte, rev}, ou null), `prof` : dropbox.js, où une première visite dépose. Rend "tableau".
+export function tableau(classe, echeances, catalogue, ouvrir, identites = null, prof = null) {
+  return py.pyimport("pont_tableau").montrer(classe, echeances ?? "", catalogue ?? "", ouvrir, identites?.texte ?? "",
+                                             prof?.identites_lire, prof?.identites_ecrire);
 }
