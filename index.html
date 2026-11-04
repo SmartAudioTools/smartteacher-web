@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1793751902";
+const VERSION = "?v=1793797502";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -172,7 +172,7 @@ try {
   if (classe) {
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
-    const ouvrir = lien => { const u = new URL(location.href); u.search = new URLSearchParams({ sujet: lien }); location.assign(u); };
+    const ouvrir = (lien, code) => { const u = new URL(location.href); u.search = new URLSearchParams({ sujet: lien, ...(code && { code }) }); location.assign(u); };
     const [echeances_classe, catalogue, empreintes] = await fichiers;
     tableau(classe, echeances_classe, catalogue, ouvrir, empreintes || null, prof || null);
     await page.etat("tableau");
