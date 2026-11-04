@@ -57,7 +57,7 @@
 //   ?sujet=x.qcm : le sujet à côté de la page, ou dans le dossier Dropbox du professeur (sinon l'élève choisit le fichier) ;
 //   ?classe=2nd 5 : le tableau de bord de la classe (tableau_eleves.py), chaque sujet prévu avec son bouton, qui rouvre la page
 //                   sur ?sujet= ; l'adresse fixe que l'élève met en favori ou en page d'accueil ;
-//     x.report : le bilan d'un élève (bilans.py fichiers), ouvert par son code personnel au lieu de l'épreuve ;
+//     x.report : le bilan d'un élève (bilans.py fichiers), en clair ou ouvert par son mot de passe, au lieu de l'épreuve ;
 //   ?eleve=Nom Prénom : l'épreuve commence sans passer par l'accueil (la sonde, l'essai de déploiement).
 // window.etat : "en cours", puis "accueil", "epreuve" ou "erreur" (ce que lit qtpy6.web.sonde) ; window.envoi : {date, chemin} du
 // dernier envoi réussi ; window.py : Pyodide (essai_deploiement.py).
@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1793748615";
+const VERSION = "?v=1793751902";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";

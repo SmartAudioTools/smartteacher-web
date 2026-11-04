@@ -9,7 +9,7 @@
 //                                  la classe (erreurs_lire, erreurs_ecrire : les seules fonctions qui écrivent autre chose qu'une copie),
 //                                  relu avant chaque correction ; le professeur le fusionne dans ses banques (dropbox_professeur.py erreurs) ;
 //   …/<sujet>/[<classe>/]<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui
-//                                  donne le pont (codes.chemin_copie), dans le dossier du sujet à côté de lui ; tout y est, jusqu'à l'empreinte du code personnel qui la garde,
+//                                  donne le pont (codes.chemin_copie), dans le dossier du sujet à côté de lui ; tout y est, jusqu'à l'empreinte du mot de passe qui la garde,
 //                                  que le pont vérifie en la déchiffrant. Sa date est celle du serveur de Dropbox
 //                                  (server_modified), jamais celle de l'élève : c'est elle que dropbox_professeur.py compare
 //                                  à la date limite.
