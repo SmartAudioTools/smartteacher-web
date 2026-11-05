@@ -138,7 +138,7 @@ export function professeur(cle) {
     },
 
     // Le fichier d'empreintes des élèves (codes.IDENTITES), à la racine : {texte, rev}, ou null s'il n'existe pas encore. Une
-    // première visite y ajoute la sienne (pont_qt.deposer_identite) ; le professeur le scelle chez lui (codes.sceller).
+    // première visite y ajoute la sienne (pont_qt.deposer_identite) ; le professeur en tire la clé des bilans (codes.cle_bilan).
     async identites_lire() {
       const r = await lire(IDENTITES);
       return r && { texte: await r.text(), rev: JSON.parse(r.headers.get("Dropbox-API-Result")).rev };
