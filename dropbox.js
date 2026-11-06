@@ -24,10 +24,55 @@
 export const ascii = nom => nom.replaceAll("°", "o").replaceAll("œ", "oe").replaceAll("Œ", "OE").replaceAll("æ", "ae")
   .normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9./-]+/g, "_").replace(/_(?=[./]|$)|(?<=\/)_|^_/g, "");
 
-// Le délai d'un appel, réponse lue comprise : un appel pendu (réseau du lycée, Dropbox muet) arrêtait sinon pour toujours
-// l'envoi de la copie et le témoin de présence, qui se suivent dans la même boucle (gel du TP01, 15/10/2026). Une minute
-// laisse passer une copie de 400 ko sur un réseau lent ; l'échec est dit à l'élève et l'envoi retenté au tour suivant.
-const DELAI = 60000;
+// Un appel muet est abandonné, réponse lue comprise : un appel pendu (réseau du lycée, Dropbox muet) arrêtait sinon pour
+// toujours l'envoi de la copie et le témoin de présence, qui se suivent dans la même boucle (gel du TP01, 15/10/2026) ;
+// l'échec est dit à l'élève et l'envoi retenté au tour suivant. Muet = TOURS tours de veille de suite sans rien reçu (ni
+// en-têtes, ni morceau du corps), soit une minute : de quoi envoyer une copie de 400 ko sur un réseau lent.
+// Des TOURS comptés, pas une durée (AbortSignal.timeout, jusqu'au 06/11/2026) : la page qui se prépare bloque son fil
+// principal par longues tranches (Pyodide-Qt sur un PC lent du lycée) ; le sujet, arrivé entier pendant ce temps, n'est lu
+// qu'au déblocage, et le délai échu l'emportait : « La page n'a pas pu se préparer : The operation was aborted. » (Firefox,
+// fetch abandonné en cours de lecture du corps ; reproduit par SmartTeacher_essais/lecteur_web/w160/fil_bloque.py). Un fil
+// bloqué une minute ne fait qu'un tour de veille, et le corps reçu entre-temps remet le compte à zéro.
+const TOUR = 10000, TOURS = 6;
+export async function appeler(url, options, tour = TOUR) {
+  const arret = new AbortController(), muet = new DOMException(`Dropbox ne répond plus (${TOURS * tour / 1000} s sans rien recevoir)`, "TimeoutError");
+  let muets = 0, corps = null;
+  const veille = setInterval(() => {
+    if (++muets < TOURS) return;
+    clearInterval(veille);
+    // les en-têtes reçus, le relais seul échoue (et annule la source) : abandonner le fetch donnerait au lecteur le « The
+    // operation was aborted. » anonyme de Firefox au lieu de ce message-ci
+    if (corps) corps.error(muet);
+    else arret.abort(muet);
+  }, tour);
+  let r;
+  try {
+    r = await fetch(url, { ...options, signal: arret.signal });
+  } catch (erreur) {
+    clearInterval(veille);
+    throw erreur;
+  }
+  muets = 0;
+  if (!r.body) { clearInterval(veille); return r; }
+  // une réponse jamais lue (401 rejoué, 409 rendu null) : la veille finit seule au bout des TOURS, sur un appel déjà terminé
+  let relais;
+  const lisible = r.body.pipeThrough(new TransformStream({ start: c => { relais = c; }, transform: (bloc, c) => { muets = 0; c.enqueue(bloc); },
+                                                          flush: () => clearInterval(veille) }));
+  corps = relais;
+  // Le corps lu par un lecteur du flux, pas par Response.arrayBuffer() : Firefox y remplace toute erreur du flux par le
+  // même « The operation was aborted. » (essai_appeler.py, erreur_flux.py), et le message de la veille serait perdu
+  const octets = async () => {
+    const lecteur = lisible.getReader(), morceaux = [];
+    for (let m; !(m = await lecteur.read()).done;) morceaux.push(m.value);
+    const tout = new Uint8Array(morceaux.reduce((n, m) => n + m.byteLength, 0));
+    morceaux.reduce((n, m) => (tout.set(m, n), n + m.byteLength), 0);
+    return tout;
+  };
+  const reponse = new Response(null, { status: r.status, statusText: r.statusText, headers: r.headers });
+  return Object.assign(reponse, { arrayBuffer: async () => (await octets()).buffer,
+                                  text: async () => new TextDecoder().decode(await octets()),
+                                  json: async () => JSON.parse(new TextDecoder().decode(await octets())) });
+}
 
 export function professeur(cle) {
   const [client_id, refresh_token] = atob(cle).split(" ");
@@ -35,9 +80,8 @@ export function professeur(cle) {
 
   async function jeton() {
     if (!acces) {
-      const r = await fetch("https://api.dropboxapi.com/oauth2/token",
-                            { method: "POST", body: new URLSearchParams({ grant_type: "refresh_token", refresh_token, client_id }),
-                              signal: AbortSignal.timeout(DELAI) });
+      const r = await appeler("https://api.dropboxapi.com/oauth2/token",
+                              { method: "POST", body: new URLSearchParams({ grant_type: "refresh_token", refresh_token, client_id }) });
       if (!r.ok) throw new Error(`Dropbox refuse la clé de la page (${r.status})`);
       acces = (await r.json()).access_token;
     }
@@ -58,8 +102,7 @@ export function professeur(cle) {
         entetes["Content-Type"] = "application/json";
         corps = JSON.stringify(arg);
       }
-      const r = await fetch(`https://${contenu ? "content" : "api"}.dropboxapi.com/2/${route}`, { method: "POST", headers: entetes, body: corps,
-                                                                                                  signal: AbortSignal.timeout(DELAI) });
+      const r = await appeler(`https://${contenu ? "content" : "api"}.dropboxapi.com/2/${route}`, { method: "POST", headers: entetes, body: corps });
       if (r.status === 401 && !essai) { acces = null; continue; }
       if (r.ok) return r;
       const erreur = await r.text();
