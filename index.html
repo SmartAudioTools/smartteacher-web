@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1793910608";
+const VERSION = "?v=1793925013";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -129,6 +129,7 @@ try {
     ecrire: async (chemin, copie) => { const date = await prof.ecrire(chemin, copie); window.envoi = { date, chemin }; return date; },
     deplacer: prof.deplacer,
     presence: prof.presence,
+    journal: prof.journal,  // la boîte noire d'une visite qui a gelé (pont_qt.envoyer_boite_noire)
     fichier: prof.fichier,  // le bilan de l'année de l'élève (pont_qt.bilan_du_professeur)
     identites_lire: prof.identites_lire,
     identites_ecrire: prof.identites_ecrire,

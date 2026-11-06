@@ -80,6 +80,7 @@ export function professeur(cle) {
   // Le magasin d'erreurs d'un sujet : le chemin du sujet (.qcm, tel que ``fichier`` le reçoit) dont le .qcm devient .erreurs.json.
   const magasin = sujet => sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.erreurs\\.json$`, sur(`\\.qcm$`, sujet).replace(/\.qcm$/, ".erreurs.json"));
   const IDENTITES = "/identites.json";
+  const ECHEANCES = "/echeances.csv";
 
   return {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm ou un bilan d'élève (.report, bilans.py fichiers) de la racine ou
@@ -124,6 +125,12 @@ export function professeur(cle) {
       await appel("files/upload", { path: sur(COPIE + "etat\\.json$", chemin), mode: "overwrite", mute: true }, texte);
     },
 
+    // La boîte noire d'une visite qui a gelé (pont_qt.envoyer_boite_noire, qtpy6.web.boite_noire), à côté de la copie de
+    // l'élève : « <copie>.journal.txt », renommée plutôt qu'écrasée s'il y en a déjà une (une par gel). Jamais lue par la page.
+    async journal(chemin, texte) {
+      await appel("files/upload", { path: sur(COPIE + "journal\\.txt$", chemin), mode: "add", autorename: true, mute: true }, texte);
+    },
+
     // Le magasin d'erreurs types du sujet (``ReponseOuverte.magasin``) : {texte, rev}, ou null s'il n'existe pas encore.
     async erreurs_lire(sujet) {
       const r = await lire("/" + magasin(sujet));
@@ -148,6 +155,22 @@ export function professeur(cle) {
     async identites_ecrire(texte, rev) {
       const mode = rev ? { ".tag": "update", update: rev } : "add";
       const r = await appel("files/upload", { path: IDENTITES, mode, autorename: false, mute: true }, texte, true);
+      return r && { rev: (await r.json()).rev };
+    },
+
+    // Le fichier d'échéances, pour le professeur entré dans le tableau de sa classe (``tableau_eleves.Reglages``,
+    // ``regler_par``) : {texte, rev}, ou null s'il n'existe pas ; le texte garde son BOM, que l'écriture rend tel quel au tableur.
+    async echeances_lire() {
+      const r = await lire(ECHEANCES);
+      return r && { texte: new TextDecoder("utf-8", { ignoreBOM: true }).decode(await r.arrayBuffer()),
+                    rev: JSON.parse(r.headers.get("Dropbox-API-Result")).rev };
+    },
+
+    // Le même, écrit sur la version ``rev`` (``echeances.recopier`` n'y ajoute qu'une ligne en bas) : {rev}, ou null si quelqu'un
+    // l'a changé depuis. Le professeur seul en a le bouton ; la clé de la page, elle, ouvre tout le dossier (en-tête).
+    async echeances_ecrire(texte, rev) {
+      const mode = rev ? { ".tag": "update", update: rev } : "add";
+      const r = await appel("files/upload", { path: ECHEANCES, mode, autorename: false, mute: true }, texte, true);
       return r && { rev: (await r.json()).rev };
     },
 
