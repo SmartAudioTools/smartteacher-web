@@ -128,9 +128,11 @@ export function professeur(cle) {
 
   return {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm ou un bilan d'élève (.report, bilans.py fichiers) de la racine ou
-    // d'un niveau, quel que soit le paramètre de la page.
+    // d'un niveau, ou un PDF de cours d'un niveau (les boutons « Cours » du tableau, tableau_eleves.ouvrir_cours ; refusé
+    // jusqu'au 08/11/2026, le professeur : « les boutons de cours (pdf et diaporama) ne trouvent pas les cours »), quel que
+    // soit le paramètre de la page.
     async fichier(sujet) {
-      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.(qcm|report)$`, sujet));
+      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.(qcm|report)$|^${NIVEAU}.+\\.pdf$`, sujet));
       if (!r) throw new Error(sujet + " introuvable dans le dossier Dropbox du professeur");
       return new Uint8Array(await r.arrayBuffer());
     },
