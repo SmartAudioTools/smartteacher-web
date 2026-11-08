@@ -1,8 +1,8 @@
 // Le professeur, vu de la page : le dossier d'application Dropbox où il dépose ses sujets et reçoit les copies, appelé
 // directement depuis le navigateur (API HTTP de Dropbox, qui accepte toutes les origines). Ce dossier est synchronisé sur son
 // disque par son client Dropbox, comme le reste de son Dropbox (Applications/<nom de l'application>/) :
-//   Seconde/, Premiere/, Terminale/  un dossier par niveau, puis la même arborescence que les cours sur son disque, en
-//                                  ASCII (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
+//   Seconde/, Première/, Terminale/  un dossier par niveau, puis la même arborescence que les cours sur son disque, avec
+//                                  ses noms (codes.en_ligne, arborescence validée le 29/09/2026) : le PDF du cours, et sous le
 //                                  dossier d'un sujet, QCM/<x>.qcm tel qu'exporter_eleve le produit et ses copies ;
 //   <x>.qcm                        un sujet hors de ces trois niveaux, à la racine, ses copies à côté ;
 //   <x>.erreurs.json               à côté du <x>.qcm de la page : les erreurs types que la correction automatique y ajoute pour toute
@@ -19,10 +19,11 @@
 
 // cle : ce que construire.py écrit dans la page (DROPBOX de deployer.conf), la clé de l'application et son jeton de
 // renouvellement, séparés d'une espace, en base64 : un jeton en clair sur GitHub serait révoqué par ses robots.
-// codes.en_ascii, à l'identique (tests_modele : test_en_ascii les compare) : accents ôtés, « ° » en « o », tout autre signe
-// en un seul « _ », jamais en bord de nom.
-export const ascii = nom => nom.replaceAll("°", "o").replaceAll("œ", "oe").replaceAll("Œ", "OE").replaceAll("æ", "ae")
-  .normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9./-]+/g, "_").replace(/_(?=[./]|$)|(?<=\/)_|^_/g, "");
+// Un chemin du disque tel que codes.en_ligne le dépose : codes.nom_de_fichier sur chaque nom, à l'identique (tests_modele :
+// test_en_ascii les compare) : / \ : * ? " < > | en « - », blancs réduits à une espace, ni espace ni point en bord. Les noms
+// du disque, plus l'ASCII, depuis le 08/11/2026 (l'utilisateur).
+const nom_de_fichier = nom => nom.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").replace(/^[ .]+|[ .]+$/g, "") || "sans nom";
+export const en_ligne = chemin => chemin.split("/").map(nom_de_fichier).join("/");
 
 // Un appel muet est abandonné, réponse lue comprise : un appel pendu (réseau du lycée, Dropbox muet) arrêtait sinon pour
 // toujours l'envoi de la copie et le témoin de présence, qui se suivent dans la même boucle (gel du TP01, 15/10/2026) ;
@@ -111,13 +112,13 @@ export function professeur(cle) {
     }
   }
   const lire = chemin => appel("files/download", { path: chemin });
-  const NIVEAU = "(Seconde|Premiere|Terminale)/";
+  const NIVEAU = "(Seconde|Première|Terminale)/";  // codes.EN_LIGNE, accentué depuis le 08/11/2026
   const sur = (motif, chemin) => {  // le chemin, s'il suit le motif sans détour par « .. »
     if (!new RegExp(motif).test(chemin) || /(^|\/)\.\.?(\/|$)/.test(chemin)) throw new Error("chemin refusé : " + chemin);
     return chemin;
   };
-  // Le pont ne touche qu'aux copies, « <sujet> [<élève>]… » (codes.est_copie) : jamais un sujet, dont le nom passé par
-  // en_ascii n'a ni espace ni crochet.
+  // Le pont ne touche qu'aux copies, « <sujet> [<élève>]… » (codes.est_copie) : jamais un sujet, dont le nom n'a pas de
+  // crochet.
   const COPIE = `^/([^/]+/)*[^/]+ \\[[^/]*\\][^/]*\\.`;
   const copie = chemin => sur(COPIE + "qcm$", chemin);
   // Le magasin d'erreurs d'un sujet : le chemin du sujet (.qcm, tel que ``fichier`` le reçoit) dont le .qcm devient .erreurs.json.
@@ -145,8 +146,8 @@ export function professeur(cle) {
     async cours(sujet, chemin) {
       const parties = sujet.split("/").slice(0, -1);
       for (const partie of chemin.split("/")) partie === ".." ? parties.pop() : partie !== "." && parties.push(partie);
-      // en ASCII, comme codes.en_ligne les a déposés : le .qcm cite son cours avec les noms du disque
-      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, ascii(parties.join("/"))));
+      // nommé comme codes.en_ligne l'a déposé : le .qcm cite son cours avec les noms du disque
+      const r = await lire("/" + sur(`^${NIVEAU}.+\\.pdf$`, en_ligne(parties.join("/"))));
       return r && new Uint8Array(await r.arrayBuffer());
     },
 
