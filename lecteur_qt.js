@@ -44,9 +44,11 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
 // Le sujet (octets d'un .qcm) : l'accueil du lecteur, ou l'épreuve si `eleve` (« Nom Prénom ») est connu et que le sujet
 // s'ouvre sans code. `page` : ce que la page offre au pont, lien de téléchargement, état, statut, copie chez le professeur
 // (pont_qt.demarrer). `jeton` : le code de la classe que porte le lien (?code=). `nom` : le nom du fichier, qui dit un
-// bilan d'élève (.report) plutôt qu'un sujet. Rend "accueil" ou "epreuve".
+// bilan d'élève (.report) plutôt qu'un sujet. Rend la promesse de "accueil" ou "epreuve".
+// Appel PROMETTANT (callPromising, comme le lancer de qtpy6web.js) : l'accueil y attend l'heure en ligne (horloge.demarrer,
+// un QEventLoop.exec) ; appelé tel quel, rien n'y suspendait et l'heure de l'ordinateur jugeait la date du code (B3, W486).
 export function lancer(octets, eleve, page = {}, jeton = "", nom = "") {
-  return pont.demarrer(octets, eleve || "", page, jeton || "", nom || "");
+  return pont.demarrer.callPromising(octets, eleve || "", page, jeton || "", nom || "");
 }
 
 // Le tableau de bord de la classe `classe` (?classe=) au lieu d'un sujet : pont_tableau.montrer, sur le texte des deux fichiers

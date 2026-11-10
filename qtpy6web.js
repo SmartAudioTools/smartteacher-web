@@ -98,26 +98,52 @@ export function print(m) {
 // suspensions de `boucles_qt`. La visite suivante de la même page la lit (`boite_noire_precedente`) : `fin` nul et
 // `vivant` ancien disent une page tuée sans pagehide, un fil bloqué jusqu'au bout. L'application décide où l'envoyer.
 const BOITE = "qtpy6.boite_noire:" + location.pathname, SEUIL_GEL = 3000, LIGNES = 400;
-const boite = { debut: Date.now(), vivant: Date.now(), qt: null, fin: null, agent: navigator.userAgent, lignes: [] };
+const boite = { debut: Date.now(), vivant: Date.now(), qt: null, fin: null, cachee: false, agent: navigator.userAgent,
+                lignes: [] };
 let boite_avant = null, boite_ouverte = false;
+// Une ligne identique à la précédente ne s'ajoute pas : la dernière compte ses répétitions. Une erreur répétée à chaque tour
+// de pompe (100 par seconde) chassait sinon en 4 s les 400 lignes, et avec elles la cause (B1, 4 boîtes du 06-09/11 : 400 fois
+// « pompe : Cannot read properties of undefined », la cause de la mort de Pyodide perdue).
+let derniere = null, repetitions = 0, depuis = "";
 function noter(m) {
-  boite.lignes.push(`${new Date().toLocaleTimeString("fr-FR")} ${m.length > 300 ? m.slice(0, 300) + "…" : m}`);
+  const h = new Date().toLocaleTimeString("fr-FR");
+  m = m.length > 300 ? m.slice(0, 300) + "…" : m;
+  if (m === derniere && boite.lignes.length) {
+    repetitions++;
+    boite.lignes[boite.lignes.length - 1] = `${h} ${m} (×${repetitions} depuis ${depuis})`;
+    return;
+  }
+  derniere = m; repetitions = 1; depuis = h;
+  boite.lignes.push(`${h} ${m}`);
   if (boite.lignes.length > LIGNES) boite.lignes.splice(0, boite.lignes.length - LIGNES);
 }
 function sceller() {
   try { localStorage.setItem(BOITE, JSON.stringify(boite)); } catch { /* stockage plein ou refusé : la boîte reste en mémoire */ }
 }
-function ouvrir_boite_noire() {
+// Un onglet caché ou une page mise en cache (pagehide puis pageshow persisted, retour arrière) ralentit ou fige ses
+// intervalles et les QTimer : ce n'est pas un gel. L'état caché est donc pris à l'ÉVÉNEMENT, pas au tic suivant (la page
+// est souvent figée avant lui, et le tic du retour voyait un onglet resté « visible » : 50 des 90 alertes des boîtes du
+// 06-09/11, jusqu'à 596 s, n'étaient que le temps passé ailleurs), et la boucle de Qt a SEUIL_GEL depuis le retour pour battre.
+export function ouvrir_boite_noire() {
   if (boite_ouverte) return;
   boite_ouverte = true;
   try { boite_avant = JSON.parse(localStorage.getItem(BOITE)); } catch { boite_avant = null; }
-  let tic = performance.now(), visible = document.visibilityState === "visible", qt_muet = false;
+  let tic = performance.now(), visible = document.visibilityState === "visible", qt_muet = false, retour = Date.now();
+  const absente = () => { visible = false; };
+  const revenue = () => { retour = Date.now(); };
+  document.addEventListener("visibilitychange", () => document.visibilityState === "visible" ? revenue() : absente());
+  window.addEventListener("pagehide", absente);
+  window.addEventListener("pageshow", e => {
+    if (!e.persisted) return;
+    absente(); revenue(); boite.fin = null; boite.cachee = document.visibilityState !== "visible";  // revenue du cache
+    noter("page reprise du cache du navigateur");
+  });
   setInterval(() => {
     const t = performance.now(), ecart = t - tic, vu = document.visibilityState === "visible";
     tic = t;
-    if (ecart > SEUIL_GEL && vu && visible)  // un onglet caché ralentit ses intervalles : ce n'est pas un gel
+    if (ecart > SEUIL_GEL && vu && visible)
       noter(`gel de la page : ${(ecart / 1000).toFixed(1)} s sans main rendue`);
-    const muet = vu && boite.qt !== null && Date.now() - boite.qt > SEUIL_GEL;
+    const muet = vu && visible && boite.qt !== null && Date.now() - Math.max(boite.qt, retour) > SEUIL_GEL;
     if (muet && !qt_muet) {
       const s = suspension;
       noter(`la boucle de Qt ne tourne plus depuis ${((Date.now() - boite.qt) / 1000).toFixed(1)} s (page vivante ; ` +
@@ -129,7 +155,14 @@ function ouvrir_boite_noire() {
   }, 1000);
   window.addEventListener("error", e => noter(`erreur JS : ${e.message} (${e.filename}:${e.lineno})`));
   window.addEventListener("unhandledrejection", e => noter(`promesse rejetée : ${e.reason}`));
-  document.addEventListener("visibilitychange", () => noter(`onglet ${document.visibilityState === "visible" ? "montré" : "caché"}`));
+  // `cachee` scellé à l'événement : un onglet caché peut être figé puis libéré par le navigateur (Chrome, Edge, Android)
+  // sans pagehide ; la visite suivante ne doit pas le lire comme une page tuée (B4, 3 boîtes du 06-09/11/2026 : Qt battait
+  // jusqu'à la dernière seconde, morte 0 à 40 s après « onglet caché »).
+  document.addEventListener("visibilitychange", () => {
+    boite.cachee = document.visibilityState !== "visible";
+    noter(`onglet ${boite.cachee ? "caché" : "montré"}`);
+    sceller();
+  });
   document.addEventListener("fullscreenchange", () => noter(document.fullscreenElement ? "plein écran" : "plein écran quitté"));
   window.addEventListener("blur", () => noter("page sans le focus"));
   window.addEventListener("focus", () => noter("page avec le focus"));
@@ -141,13 +174,16 @@ function ouvrir_boite_noire() {
 export function battement_qt() { boite.qt = Date.now(); }
 
 // La boîte de la visite précédente de cette page, en texte (null s'il n'y en a pas) : en tête, si la page a été quittée
-// proprement (pagehide) ou tuée, fil bloqué, et la dernière seconde où elle vivait.
+// proprement (pagehide), fermée ou libérée pendant qu'elle était cachée, ou tuée, fil bloqué, et la dernière seconde où
+// elle vivait.
 export function boite_noire_precedente() {
   const b = boite_avant;
   if (!b || !Array.isArray(b.lignes)) return null;
   const h = t => t ? new Date(t).toLocaleString("fr-FR") : "?";
   return [`visite du ${h(b.debut)}, dernier signe de vie ${h(b.vivant)}, ` +
-          (b.fin ? `page quittée ${h(b.fin)}` : "page tuée sans être quittée (fil bloqué, onglet fermé de force ou plantage)"),
+          (b.fin ? `page quittée ${h(b.fin)}`
+                 : b.cachee ? "page fermée ou libérée par le navigateur pendant qu'elle était cachée (pas un gel)"
+                 : "page tuée sans être quittée (fil bloqué, onglet fermé de force ou plantage)"),
           `dernier battement de Qt : ${h(b.qt)}`, `navigateur : ${b.agent}`, "", ...b.lignes].join("\n");
 }
 
@@ -379,6 +415,8 @@ function pompe(tour, periode) {
 function pomper(tour, periode) {
   let encours = false;
   const tourner = () => {
+    // Pyodide mort (`mourir`) : plus aucun tour, chacun refaisait la même erreur 100 fois par seconde (B1, 09/11/2026).
+    if (mort) return clearInterval(intervalle);
     // Ni pendant une tâche où Qt a suspendu : entre la reprise (`ctrl.resume`) et la suite de sa pile, une pompe glissée
     // là (queueMicrotask de figer_les_evenements) la trouvait non promettante, d'où les refus en boucle (05/10/2026).
     if (encours || suspension.qtEnTache) return;
@@ -392,7 +430,27 @@ function pomper(tour, periode) {
     p.catch(e => print("pompe : " + (e.message || e))).finally(() => { encours = false; suspension.promettant = false; });
   };
   suspension.tourner = tourner;
-  setInterval(tourner, periode);
+  const intervalle = setInterval(tourner, periode);
+}
+
+// Pyodide fatalement mort (API.on_fatal, posé par `preparer`) : un module WebAssembly dans un état indéfini, que rien ne
+// relance. Pyodide écrit la cause dans la console seule (console.error) : elle va dans la boîte noire, la pompe s'arrête, et
+// la page le DIT au lieu de rester figée sans un mot (B1 : 4 élèves devant une page morte 1 à 3 min, 09/11/2026). Le texte
+// par défaut ne suppose rien de l'application ; `preparer({ mort })` le remplace.
+let mort = null, texte_mort = "L'application s'est arrêtée sur une erreur interne. Recharge la page (F5) pour reprendre.";
+function mourir(e) {
+  if (mort) return;
+  mort = e || true;
+  noter(`Pyodide mort (erreur fatale) : ${(e && e.message) || e}`);
+  for (const l of String((e && e.stack) || "").split("\n").slice(0, 12)) if (l.trim()) noter(`  ${l.trim()}`);
+  sceller();
+  const d = document.createElement("div");
+  d.id = "qtpy6-mort";
+  d.textContent = texte_mort;
+  Object.assign(d.style, { position: "fixed", inset: "0", zIndex: "2147483647", display: "flex", alignItems: "center",
+    justifyContent: "center", padding: "2em", textAlign: "center", font: "bold 1.4em sans-serif", color: "#fff",
+    background: "rgba(150, 0, 0, 0.88)" });
+  (document.fullscreenElement || document.body).appendChild(d);
 }
 
 // Le glisser rejoué. QWasmDrag attend un glisser HTML5 (dragstart…dragend) que le navigateur ne lance pas : sous un doigt,
@@ -508,8 +566,9 @@ function glisser_rejoue(conteneur) {
 }
 
 export async function preparer(conteneur, { indexURL, archives = [], roues = [], env = {}, sur_ligne, progres = () => {},
-                                            tailles = {}, jumeaux = [], module, boucles = true } = {}) {
+                                            tailles = {}, jumeaux = [], module, boucles = true, mort: texte } = {}) {
   if (sur_ligne) ecouter = sur_ligne;
+  if (texte) texte_mort = texte;
   const avance = avancement(progres);
   const { prelancer, retablir } = compter(tailles, ["pyodide.asm.wasm", "python_stdlib.zip", ...jumeaux], f => {
     avance.reel("octets", f);
@@ -528,6 +587,7 @@ export async function preparer(conteneur, { indexURL, archives = [], roues = [],
   if (boucles) boucles_qt();  // avant que Pyodide instancie son module
   const { loadPyodide } = await import(indexURL + "pyodide.mjs");
   const [py, ...donnees] = await Promise.all([loadPyodide({ indexURL, stdout: print, stderr: print }), ...zips]);
+  py._api.on_fatal = mourir;  // l'API privée de Pyodide (fatal_error l'appelle une fois, après console.error)
   if (boucles) { suspension.M = py._module; figer_les_evenements(py._module); }
   print(`Pyodide-Qt ${py.version} chargé${donnees.length ? " ; archives " + donnees.map(d => (d.byteLength / 1024) | 0).join(", ") + " Kio" : ""}`);
   avance.debut("archives");
@@ -544,6 +604,11 @@ export async function preparer(conteneur, { indexURL, archives = [], roues = [],
   if (boucles) glisser_rejoue(conteneur);
   window.qtpy6Conteneur = conteneur;  // ce que qtpy6.web.pdf lit pour caler ses <div> sur les widgets
   window.qtpy6Js = import.meta.url;  // d'où qtpy6.web.pdf charge pdf.js quand l'archive ne l'a pas (assembler, exclure)
+  // Le zoom choisi dans ce navigateur (qtpy6.loupe.zoomer, qui recharge la page) : Qt ne le prend qu'au démarrage
+  try {
+    const z = parseFloat(localStorage.getItem("qtpy6|loupe"));
+    if (z > 0 && z !== 1 && !("QT_SCALE_FACTOR" in env)) env = { ...env, QT_SCALE_FACTOR: String(z) };
+  } catch { /* stockage interdit : pas de zoom */ }
   py.runPython(`import json, os, sys
 os.environ.update(json.loads(${JSON.stringify(JSON.stringify(env))}))
 sys.path[:0] = json.loads(${JSON.stringify(JSON.stringify(archives.map(a => a.dossier)))})`);

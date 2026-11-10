@@ -138,9 +138,10 @@ export function professeur(cle) {
     },
 
     // Un des deux fichiers du tableau de bord d'une classe (tableau_eleves.py), à la racine : son texte, ou null s'il n'existe pas.
-    // echeances.csv sert aussi à l'accueil d'un sujet (page.html, pont_qt.demarrer) : il y gagne sur le code de la classe.
+    // echeances.csv sert aussi à l'accueil d'un sujet (page.html, pont_qt.demarrer) : il y gagne sur le code de la classe ;
+    // amenagements.json (amenagements_lecteur, déposé par « Déployer sur le web ») ne sert qu'à lui.
     async racine(nom) {
-      const r = await lire("/" + sur("^(echeances\\.csv|tableau\\.json)$", nom));
+      const r = await lire("/" + sur("^(echeances\\.csv|tableau\\.json|amenagements\\.json)$", nom));
       return r && await r.text();
     },
 
