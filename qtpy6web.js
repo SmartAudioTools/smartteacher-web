@@ -98,8 +98,8 @@ export function print(m) {
 // suspensions de `boucles_qt`. La visite suivante de la même page la lit (`boite_noire_precedente`) : `fin` nul et
 // `vivant` ancien disent une page tuée sans pagehide, un fil bloqué jusqu'au bout. L'application décide où l'envoyer.
 const BOITE = "qtpy6.boite_noire:" + location.pathname, SEUIL_GEL = 3000, LIGNES = 400;
-const boite = { debut: Date.now(), vivant: Date.now(), qt: null, fin: null, cachee: false, agent: navigator.userAgent,
-                lignes: [] };
+const boite = { debut: Date.now(), vivant: Date.now(), qt: null, fin: null, cachee: false, figee: false, memoire: null,
+                agent: navigator.userAgent, lignes: [] };
 let boite_avant = null, boite_ouverte = false;
 // Une ligne identique à la précédente ne s'ajoute pas : la dernière compte ses répétitions. Une erreur répétée à chaque tour
 // de pompe (100 par seconde) chassait sinon en 4 s les 400 lignes, et avec elles la cause (B1, 4 boîtes du 06-09/11 : 400 fois
@@ -135,7 +135,8 @@ export function ouvrir_boite_noire() {
   window.addEventListener("pagehide", absente);
   window.addEventListener("pageshow", e => {
     if (!e.persisted) return;
-    absente(); revenue(); boite.fin = null; boite.cachee = document.visibilityState !== "visible";  // revenue du cache
+    absente(); revenue(); boite.fin = null; boite.figee = false;  // revenue du cache
+    boite.cachee = document.visibilityState !== "visible";
     noter("page reprise du cache du navigateur");
   });
   setInterval(() => {
@@ -151,6 +152,7 @@ export function ouvrir_boite_noire() {
     } else if (!muet && qt_muet) noter("la boucle de Qt tourne de nouveau");
     qt_muet = muet; visible = vu;
     boite.vivant = Date.now();
+    memoire();
     sceller();
   }, 1000);
   window.addEventListener("error", e => noter(`erreur JS : ${e.message} (${e.filename}:${e.lineno})`));
@@ -163,6 +165,28 @@ export function ouvrir_boite_noire() {
     noter(`onglet ${boite.cachee ? "caché" : "montré"}`);
     sceller();
   });
+  // De quoi déboguer plus finement (demande de l'utilisateur, 10/11/2026) : la page figée puis libérée par le navigateur
+  // (Page Lifecycle, Chrome/Edge/Android : « freeze », « resume », `wasDiscarded` au rechargement qui suit) prouve ce que
+  // `cachee` ne fait que déduire ; le réseau perdu explique un envoi raté ; une tâche longue (Chrome/Edge) date un gel ; la
+  // mémoire (Chrome/Edge) dit une page tuée faute de place.
+  if (document.wasDiscarded) noter("page rechargée après avoir été libérée par le navigateur (wasDiscarded)");
+  document.addEventListener("freeze", () => { boite.figee = true; noter("page figée par le navigateur"); sceller(); });
+  document.addEventListener("resume", () => { boite.figee = false; noter("page reprise par le navigateur"); sceller(); });
+  window.addEventListener("offline", () => noter("réseau perdu"));
+  window.addEventListener("online", () => noter("réseau revenu"));
+  try {
+    new PerformanceObserver(l => { for (const e of l.getEntries()) if (e.duration > 1000)
+      noter(`tâche longue : ${(e.duration / 1000).toFixed(1)} s`); }).observe({ type: "longtask", buffered: true });
+  } catch { /* Firefox, Safari : pas de longtask */ }
+  const memoire = () => {
+    const m = performance.memory;
+    if (!m) return;
+    const mo = x => Math.round(x / 1048576);
+    boite.memoire = { utilisee: mo(m.usedJSHeapSize), max: Math.max(mo(m.usedJSHeapSize), boite.memoire?.max ?? 0),
+                      limite: mo(m.jsHeapSizeLimit) };
+  };
+  memoire();
+  if (navigator.onLine === false) noter("page ouverte sans réseau");
   document.addEventListener("fullscreenchange", () => noter(document.fullscreenElement ? "plein écran" : "plein écran quitté"));
   window.addEventListener("blur", () => noter("page sans le focus"));
   window.addEventListener("focus", () => noter("page avec le focus"));
@@ -182,9 +206,12 @@ export function boite_noire_precedente() {
   const h = t => t ? new Date(t).toLocaleString("fr-FR") : "?";
   return [`visite du ${h(b.debut)}, dernier signe de vie ${h(b.vivant)}, ` +
           (b.fin ? `page quittée ${h(b.fin)}`
+                 : b.figee ? "page figée puis libérée par le navigateur (pas un gel)"
                  : b.cachee ? "page fermée ou libérée par le navigateur pendant qu'elle était cachée (pas un gel)"
                  : "page tuée sans être quittée (fil bloqué, onglet fermé de force ou plantage)"),
-          `dernier battement de Qt : ${h(b.qt)}`, `navigateur : ${b.agent}`, "", ...b.lignes].join("\n");
+          `dernier battement de Qt : ${h(b.qt)}`, `navigateur : ${b.agent}`,
+          ...(b.memoire ? [`mémoire JS : ${b.memoire.utilisee} Mo (au plus ${b.memoire.max}) sur ${b.memoire.limite} Mo`] : []),
+          "", ...b.lignes].join("\n");
 }
 
 function telecharger(url) {
@@ -217,7 +244,8 @@ async function en_jumeau(fetch_origine, adresse) {
 // dossier et ce qui est en dessous) : la visite suivante a, sans aucune requête, ce que la page lui a confié.
 //   const garder = service_worker("./sw.js?v=…", { cache: "mon_appli", pyodide: "./pyodide-qt/" });
 //   … une fois la page prête : garder(url => …)   (les adresses chargées, performance, que ce filtre retient)
-// `cache` : le nom de l'application, début du nom de ses caches (ses autres caches, « NOM?… », sont effacés à l'activation : changer
+// `cache` : le nom de l'application, début du nom de ses caches (ses autres caches, « NOM?… », sont effacés à l'activation, quand
+// plus aucune page ne se sert de la version précédente, jamais en plein chargement : changer
 // la requête du script, ?v=… à chaque déploiement, repart sur un cache neuf). `pyodide` : le Pyodide des workers
 // (Travailleur), dont sw.js sert aux workers neufs les fichiers bruts depuis l'entrée de leur jumeau. Enregistré sur un
 // navigateur qui n'en a pas (ou un contexte non sûr, http hors 127.0.0.1) : rien, et `garder` ne fait rien.
@@ -231,7 +259,10 @@ export function service_worker(script, { cache = "qtpy6", pyodide, isoler = fals
   url.searchParams.set("cache", cache);
   if (pyodide) url.searchParams.set("p", new URL(pyodide, location.href).href);
   if (isoler) url.searchParams.set("isoler", "1");
-  sw.register(url).catch(erreur);
+  // la promesse de register() se résout une fois la version neuve en « installing » (ou sans elle, script inchangé) :
+  // garder l'attend, sinon, à une mise à jour, sw.ready (résolu par l'ancienne) lui ferait remplir le cache de l'ancienne
+  const inscrit = sw.register(url);
+  inscrit.catch(erreur);
   if (isoler) {
     const cle = "qtpy6-isoler", memoire = (f) => { try { return f(sessionStorage); } catch { return null; } };
     if (self.crossOriginIsolated) memoire(s => s.removeItem(cle));
@@ -243,7 +274,8 @@ export function service_worker(script, { cache = "qtpy6", pyodide, isoler = fals
   }
   return (filtre = () => true) => {
     const urls = performance.getEntriesByType("resource").map(r => r.name).filter(filtre);
-    sw.ready.then(r => r.active?.postMessage(urls)).catch(erreur);
+    // à la version qui s'installe ou attend (sw.js : elle n'évince plus l'active) : c'est son cache que la visite suivante lira
+    inscrit.then(r => (r.installing || r.waiting || r.active)?.postMessage(urls)).catch(erreur);
   };
 }
 
@@ -288,8 +320,22 @@ function compter(tailles, jumeaux, signaler) {
 // cran de Firefox (3 lignes) 18 px au lieu de 60. Chaque roulement sur le conteneur est donc rejoué sur la même cible
 // (le canevas, dans l'ombre de Qt) en pixels doublés : le défilement suit le doigt sur le pavé tactile comme une page web,
 // une ligne vaut 20 px comme sur le bureau. Un roulement en pages (rare) passe tel quel.
+// Un roulement par image, pas un par événement : Firefox sous Wayland livre la molette haute résolution en centaines de
+// petits wheel par seconde (658/s mesurés), Qt défilait et déplaçait son backing store pour chacun, le thread de la page
+// saturait et la file atteignait 4,8 s — retard puis inertie après la molette lâchée (SmartTeacher W525, 10/11/2026,
+// profil Gecko du professeur). Les deltas s'additionnent jusqu'à l'image suivante (requestAnimationFrame), rejoués en un
+// seul événement ; un changement de cible ou de touches rejoue d'abord le cumul en cours.
 function molette(conteneur) {
   const rejoues = new WeakSet();
+  let cumul = null;
+  const rejouer = () => {
+    if (!cumul) return;
+    const { cible, init } = cumul;
+    cumul = null;
+    const copie = new WheelEvent("wheel", init);
+    rejoues.add(copie);
+    cible.dispatchEvent(copie);
+  };
   addEventListener("wheel", e => {
     if (rejoues.has(e) || e.deltaMode === WheelEvent.DOM_DELTA_PAGE || !e.composedPath().includes(conteneur)) return;
     // Ctrl + molette (et le pincement du pavé tactile, que le navigateur envoie ainsi) : le zoom du navigateur, que Qt-WASM
@@ -297,12 +343,15 @@ function molette(conteneur) {
     // molette sur le lecteur de SmartTeacher (remarque d'un professeur, 06/11/2026) ; Ctrl + plus / moins passait déjà.
     if (e.ctrlKey) { e.stopImmediatePropagation(); return; }
     const k = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 40 : 2;
-    const copie = new WheelEvent("wheel", { deltaX: e.deltaX * k, deltaY: e.deltaY * k, deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-      clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY, buttons: e.buttons, ctrlKey: e.ctrlKey,
-      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, bubbles: true, composed: true, cancelable: true });
-    rejoues.add(copie);
+    const cible = e.composedPath()[0], touches = `${e.shiftKey}${e.altKey}${e.metaKey}${e.buttons}`;
     e.stopImmediatePropagation(); e.preventDefault();
-    e.composedPath()[0].dispatchEvent(copie);
+    if (cumul && (cumul.cible !== cible || cumul.touches !== touches)) rejouer();
+    const deja = cumul?.init ?? { deltaX: 0, deltaY: 0 };
+    if (!cumul) requestAnimationFrame(rejouer);
+    cumul = { cible, touches, init: { deltaX: deja.deltaX + e.deltaX * k, deltaY: deja.deltaY + e.deltaY * k,
+      deltaMode: WheelEvent.DOM_DELTA_PIXEL, clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY,
+      buttons: e.buttons, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, bubbles: true,
+      composed: true, cancelable: true } };
   }, { capture: true, passive: false });
 }
 
