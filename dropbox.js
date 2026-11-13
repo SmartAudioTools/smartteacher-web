@@ -93,7 +93,7 @@ export function professeur(cle) {
   // pur, comme Dropbox l'exige : les accents des noms d'élèves y passent en \uXXXX.
   // ``conflit`` : un 409 « conflict » (écriture sur une version périmée) rend aussi null.
   async function appel(route, arg, corps, conflit = false) {
-    const contenu = !route.startsWith("files/move");
+    const contenu = !/^files\/(move|list_folder)/.test(route);
     for (let essai = 0; ; essai++) {
       const entetes = { Authorization: "Bearer " + await jeton() };
       if (contenu) {
@@ -123,6 +123,27 @@ export function professeur(cle) {
   const copie = chemin => sur(COPIE + "qcm$", chemin);
   // Le magasin d'erreurs d'un sujet : le chemin du sujet (.qcm, tel que ``fichier`` le reçoit) dont le .qcm devient .erreurs.json.
   const magasin = sujet => sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.erreurs\\.json$`, sur(`\\.qcm$`, sujet).replace(/\.qcm$/, ".erreurs.json"));
+  // Une copie rendue en retard est renommée « <copie> (en retard de X min Y s).qcm » chez le professeur
+  // (dropbox_professeur.py copies), où la page, qui la cherchait sous son seul nom, ne la trouvait plus : l'élève rouvrait
+  // un TP vierge, déposé à côté (TP11, 13/11/2026, W607). ``renommees`` : nom de la page → nom réel, retenu par ``lire``
+  // pour que ``ecrire`` et ``deplacer`` visent la même copie.
+  const renommees = {};
+  const vraie = chemin => renommees[chemin.toLowerCase()] || chemin;
+  async function renommee(chemin) {
+    const dossier = chemin.slice(0, chemin.lastIndexOf("/")), base = chemin.slice(dossier.length + 1, -".qcm".length).toLowerCase();
+    let r = await appel("files/list_folder", { path: dossier });
+    if (!r) return null;
+    let page = await r.json(), entrees = page.entries;
+    while (page.has_more) {
+      page = await (await appel("files/list_folder/continue", { cursor: page.cursor })).json();
+      entrees = entrees.concat(page.entries);
+    }
+    const motif = / \(en retard de [^)]*\)( \(\d+\))?\.qcm$/;
+    const trouvees = entrees.filter(e => e[".tag"] === "file" && motif.test(e.name)
+                                         && e.name.toLowerCase().replace(motif, "") === base);
+    trouvees.sort((a, b) => a.server_modified < b.server_modified ? 1 : -1);  // la plus récente
+    return trouvees.length ? trouvees[0].path_display : null;
+  }
   const IDENTITES = "/identites.json";
   const ECHEANCES = "/echeances.csv";
 
@@ -155,14 +176,24 @@ export function professeur(cle) {
     },
 
     // Une copie (pont_qt.lire) : {copie (texte), date (ms, horloge de Dropbox)}, ou null.
+    // Absente sous son nom, elle est cherchée renommée en retard (``renommee``).
     async lire(chemin) {
-      const r = await lire(copie(chemin));
+      let r = await lire(copie(vraie(chemin)));
+      if (!r) {
+        delete renommees[chemin.toLowerCase()];  // déplacée depuis : on la recherche
+        // une liste refusée (droit, réseau) n'empêche pas d'écrire la copie sous son nom, comme avant
+        const autre = await renommee(copie(chemin)).catch(erreur => (console.warn("copie en retard non cherchée :", erreur), null));
+        if (autre) {
+          renommees[chemin.toLowerCase()] = autre;
+          r = await lire(copie(autre));
+        }
+      }
       return r && { copie: await r.text(), date: Date.parse(JSON.parse(r.headers.get("Dropbox-API-Result")).server_modified) };
     },
 
     // Une copie écrite ou remplacée : sa date (ms, horloge de Dropbox).
     async ecrire(chemin, texte) {
-      const r = await appel("files/upload", { path: copie(chemin), mode: "overwrite", mute: true }, texte);
+      const r = await appel("files/upload", { path: copie(vraie(chemin)), mode: "overwrite", mute: true }, texte);
       return Date.parse((await r.json()).server_modified);
     },
 
@@ -222,6 +253,11 @@ export function professeur(cle) {
     },
 
     // Une copie mise de côté, un numéro ajouté si le nom est pris ; rien si elle n'existe pas.
-    deplacer: (de, vers) => appel("files/move_v2", { from_path: copie(de), to_path: copie(vers), autorename: true }),
+    // mise de côté, la copie renommée ne l'est plus : la suivante s'écrit sous le nom de la page
+    deplacer: async (de, vers) => {
+      const r = await appel("files/move_v2", { from_path: copie(vraie(de)), to_path: copie(vers), autorename: true });
+      delete renommees[de.toLowerCase()];
+      return r;
+    },
   };
 }
