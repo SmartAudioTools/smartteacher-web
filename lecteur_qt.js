@@ -58,5 +58,6 @@ export function lancer(octets, eleve, page = {}, jeton = "", nom = "") {
 export function tableau(classe, echeances, catalogue, ouvrir, identites = null, prof = null) {
   return py.pyimport("pont_tableau").montrer(classe, echeances ?? "", catalogue ?? "", ouvrir, identites?.texte ?? "",
                                              prof?.identites_lire, prof?.identites_ecrire,
-                                             prof?.echeances_lire, prof?.echeances_ecrire, prof?.fichier);
+                                             prof?.echeances_lire, prof?.echeances_ecrire, prof?.fichier,
+                                             prof?.contestation);
 }

@@ -209,6 +209,14 @@ export function professeur(cle) {
       await appel("files/upload", { path: sur(COPIE + "journal\\.txt$", chemin), mode: "add", autorename: true, mute: true }, texte);
     },
 
+    // La contestation d'une note papier (tableau_eleves.lier_notes, W763) : les signalements de l'élève sur sa copie
+    // corrigée, à côté du PDF (chemin relatif au dossier du professeur, comme ``fichier``) :
+    // « <sujet> [<élève>].contestations.json », renommé plutôt qu'écrasé s'il y en a déjà un. Jamais lu par la page.
+    async contestation(chemin, texte) {
+      await appel("files/upload", { path: "/" + sur(`^${NIVEAU}([^/]+/)*[^/]+ \\[[^/]*\\]\\.contestations\\.json$`, chemin),
+                                    mode: "add", autorename: true, mute: true }, texte);
+    },
+
     // Le magasin d'erreurs types du sujet (``ReponseOuverte.magasin``) : {texte, rev}, ou null s'il n'existe pas encore.
     async erreurs_lire(sujet) {
       const r = await lire("/" + magasin(sujet));
