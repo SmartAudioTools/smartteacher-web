@@ -1,0 +1,14 @@
+{
+  "name": "Réservation des ordinateurs et des tablettes",
+  "short_name": "Réservation",
+  "lang": "fr",
+  "start_url": "reservation.html",
+  "scope": "reservation.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {"src": "icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
