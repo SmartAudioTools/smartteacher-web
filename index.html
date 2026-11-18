@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1794996320";
+const VERSION = "?v=1795007226";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -137,6 +137,7 @@ try {
   const commencer = async (octets, nom) => {
     page.echeances = await echeances;
     page.amenagements = await amenagements;
+    page.jugement = await jugement;
     page.identites = (await identites) || null;
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
@@ -152,6 +153,8 @@ try {
   const echeances = !classe && texte("echeances.csv");
   // et la table des aménagements que le lecteur applique à l'élève (amenagements_lecteur : durée, énoncé simplifié, corps)
   const amenagements = !classe && texte("amenagements.json");
+  // et la clé du modèle qui note (cle_jugement), qui prime sur celle du sujet : changer de clé ne redéploie aucun sujet (W782)
+  const jugement = !classe && texte("jugement.txt");
   // et le fichier d'empreintes, où l'accueil reconnaît l'élève à son mot de passe (lecteur.Accueil.identifier ; le tableau
   // le lit avec ses deux fichiers)
   const identites = !classe && prof && prof.identites_lire().catch(e => { noter(e); return null; });
