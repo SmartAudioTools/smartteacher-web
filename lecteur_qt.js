@@ -52,7 +52,7 @@ export function lancer(octets, eleve, page = {}, jeton = "", nom = "") {
 }
 
 // Le tableau de bord de la classe `classe` (?classe=) au lieu d'un sujet : pont_tableau.montrer, sur le texte des deux fichiers
-// du professeur (null : absent) ; `ouvrir(lien, code, section)` : un bouton pressé, le chemin du .qcm dans son dossier et son code pour cette classe (`?code=`), et pour un « Réviser » la section pressée (`?section=`, liste JSON, que pont_qt.demarrer relit) ; `identites` : le
+// du professeur (null : absent) ; `ouvrir(lien, code, section, essai)` : un bouton pressé, le chemin du .qcm dans son dossier et son code pour cette classe (`?code=`), et pour un « Réviser » la section pressée (`?section=`, liste JSON, que pont_qt.demarrer relit), et la série choisie dans son historique (`?essai=`, pont_qt.montrer) ; `identites` : le
 // fichier d'empreintes lu ({texte, rev}, ou null), `prof` : dropbox.js, où une première visite dépose, et où le professeur
 // écrit les réglages de ses sujets (echeances.csv), et d'où vient le bilan de l'année de l'élève (fichier). Rend "tableau".
 export function tableau(classe, echeances, catalogue, ouvrir, identites = null, prof = null) {
