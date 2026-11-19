@@ -27,7 +27,9 @@ function ouvrir() {
   document.querySelectorAll('iframe').forEach(f => f.remove());
   const f = document.createElement('iframe');
   f.title = "Réservation des tours d'ordinateurs";
-  f.src = 'https://script.google.com/macros/s/AKfycbx1YhW7btLQNYPbTXz10k7chPFXGjCDoaoT2SFduRukQXy-ckxXCRhDggXD0nIk50AuxA/exec?v=' + Date.now();
+  f.src = 'https://script.google.com/macros/s/AKfycbx1YhW7btLQNYPbTXz10k7chPFXGjCDoaoT2SFduRukQXy-ckxXCRhDggXD0nIk50AuxA/exec?v=' + Date.now()
+    // Lancé depuis l'écran d'accueil : la page ne propose plus de l'y mettre (19/11/2026).
+    + (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true ? '&appli=1' : '');
   document.body.appendChild(f);
 }
 ouvrir();
