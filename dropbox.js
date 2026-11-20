@@ -8,6 +8,7 @@
 //   <x>.erreurs.json               à côté du <x>.qcm de la page : les erreurs types que la correction automatique y ajoute pour toute
 //                                  la classe (erreurs_lire, erreurs_ecrire : les seules fonctions qui écrivent autre chose qu'une copie),
 //                                  relu avant chaque correction ; le professeur le fusionne dans ses banques (dropbox_professeur.py erreurs) ;
+//   Journaux/<classe>/             les journaux de plantage de l'accueil de la classe (journal_de_classe) ;
 //   …/<sujet>/[<classe>/]<sujet> [<élève>].qcm  la copie d'un élève, le texte que le lecteur enregistre, à la place que lui
 //                                  donne le pont (codes.chemin_copie), dans le dossier du sujet à côté de lui ; tout y est, jusqu'à l'empreinte du mot de passe qui la garde,
 //                                  que le pont vérifie en la déchiffrant. Sa date est celle du serveur de Dropbox
@@ -215,6 +216,14 @@ export function professeur(cle) {
     // l'élève : « <copie>.journal.txt », renommée plutôt qu'écrasée s'il y en a déjà une (une par gel). Jamais lue par la page.
     async journal(chemin, texte) {
       await appel("files/upload", { path: sur(COPIE + "journal\\.txt$", chemin), mode: "add", autorename: true, mute: true }, texte);
+    },
+
+    // La boîte noire d'une visite qui a planté, envoyée par l'accueil de la classe qui la suit (page.html, ?classe=) : dans le dossier Journaux de
+    // la classe, « Journaux/<classe>/<nom>.journal.txt », renommée plutôt qu'écrasée (demande du professeur, 20/11/2026, W836).
+    // Jamais lue par la page.
+    async journal_de_classe(classe, nom, texte) {
+      const chemin = "/Journaux/" + nom_de_fichier(classe) + "/" + nom_de_fichier(nom) + ".journal.txt";
+      await appel("files/upload", { path: sur("^/Journaux/[^/]+/[^/]+\\.journal\\.txt$", chemin), mode: "add", autorename: true, mute: true }, texte);
     },
 
     // La contestation d'une note papier (tableau_eleves.lier_notes, W763) : les signalements de l'élève sur sa copie

@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795205743";
+const VERSION = "?v=1795213851";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -174,7 +174,26 @@ try {
   }));
   octets?.catch(() => {});  // attendue plus bas : une erreur précoce n'est pas « non rattrapée »
   const avancer = f => { $("#message").style.setProperty("--p", f); $("#message").dataset.pourcent = `${(Math.floor(f * 1000) / 10).toFixed(1).replace(".", ",")} %`; };
-  window.py = await preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, roues_pyodide: ROUES_PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
+  const prete = preparer($("#qt"), { indexURL: PYODIDE_QT, pyodide: PYODIDE, roues_pyodide: ROUES_PYODIDE, sur_ligne, progres: f => avancer(0.95 * f) });
+  // ?classe= : la boîte noire de la visite précédente (ouverte par preparer avant tout chargement), si elle a planté, part au
+  // dossier Journaux de la classe dès maintenant, sans attendre Python : un accueil qui meurt au démarrage ne l'enverrait
+  // jamais (élève de Seconde 1, 20/11/2026, W836). Nommée par la date et l'élève retenu sur ce navigateur (pont_qt.IDENTITE).
+  // L'accueil et les sujets partagent la même boîte (une clé par adresse de page, index.html pour tous) : chaque visite y
+  // écrit d'abord ce qu'elle montre, d'où le nom du journal, qui peut être celui d'un sujet ouvert avant (W837).
+  const boite = window.qtpy6BoiteNoire?.precedente();
+  window.qtpy6BoiteNoire?.noter(classe ? `page : accueil de ${classe}` : `page : sujet ${sujet ?? "choisi sur le disque"}`);
+  if (classe && prof) {
+    if (boite && /Pyodide mort|erreur JS|promesse rejetée/.test(boite)) {
+      let eleve = "";
+      try { eleve = JSON.parse(localStorage.getItem("smartteacher-qt|identite") || "[]").slice(0, 2).join(" "); } catch { /* inconnu */ }
+      const d = new Date(), z = n => String(n).padStart(2, "0");
+      const vue = /page : sujet (.*)/.exec(boite)?.[1].split("/").pop().replace(/\.qcm$/, "")
+        ?? (/page : accueil/.test(boite) ? "accueil" : "page inconnue");
+      const nom = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}h${z(d.getMinutes())} [${eleve || "élève inconnu"}] ${vue}`;
+      prof.journal_de_classe(classe, nom, boite).catch(e => noter(`journal non déposé : ${e.message ?? e}`));
+    }
+  }
+  window.py = await prete;
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
   garder(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
   if (classe) {
