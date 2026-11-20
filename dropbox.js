@@ -93,7 +93,7 @@ export function professeur(cle) {
   // pur, comme Dropbox l'exige : les accents des noms d'élèves y passent en \uXXXX.
   // ``conflit`` : un 409 « conflict » (écriture sur une version périmée) rend aussi null.
   async function appel(route, arg, corps, conflit = false) {
-    const contenu = !/^files\/(move|list_folder)/.test(route);
+    const contenu = !/^files\/(move|list_folder|get_metadata)/.test(route);
     for (let essai = 0; ; essai++) {
       const entetes = { Authorization: "Bearer " + await jeton() };
       if (contenu) {
@@ -156,6 +156,14 @@ export function professeur(cle) {
       const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.(qcm|report)$|^${NIVEAU}.+\\.pdf$`, sujet));
       if (!r) throw new Error(sujet + " introuvable dans le dossier Dropbox du professeur");
       return new Uint8Array(await r.arrayBuffer());
+    },
+
+    // La version d'un sujet que ``fichier`` sert (le « rev » de Dropbox, qui change à chaque dépôt), sans ses octets : le
+    // lecteur la relit quand l'élève change de question, et ne télécharge le sujet que si elle a changé (pont_qt.actualiser,
+    // W823 : un énoncé corrigé pendant le cours atteint les copies ouvertes) ; null s'il n'existe plus.
+    async version(sujet) {
+      const r = await appel("files/get_metadata", { path: "/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.qcm$`, sujet) });
+      return r && (await r.json()).rev;
     },
 
     // Un des deux fichiers du tableau de bord d'une classe (tableau_eleves.py), à la racine : son texte, ou null s'il n'existe pas.
