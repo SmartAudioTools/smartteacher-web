@@ -71,7 +71,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795216550";
+const VERSION = "?v=1795253430";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -129,7 +129,7 @@ try {
     ecrire: async (chemin, copie) => { const date = await prof.ecrire(chemin, copie); window.envoi = { date, chemin }; return date; },
     deplacer: prof.deplacer,
     presence: prof.presence,
-    journal: prof.journal,  // la boîte noire d'une visite qui a gelé (pont_qt.envoyer_boite_noire)
+    journal: prof.journal,  // la boîte noire d'une visite qui a gelé, dans Journaux/<classe>/ (pont_qt.envoyer_boite_noire)
     fichier: prof.fichier,  // le bilan de l'année de l'élève (pont_qt.bilan_du_professeur)
     version: prof.version,  // la version du sujet déposé, relue au changement de question (pont_qt.actualiser, W823)
     identites_lire: prof.identites_lire,
@@ -145,6 +145,10 @@ try {
     return lancer(octets, params.get("eleve"), page, params.get("code"), nom);  // une promesse : son échec va au catch
   };
   const sujet = params.get("sujet"), classe = !sujet && params.get("classe");
+  // l'adresse de l'accueil de la classe, que l'accueil laisse à côté de ?sujet= (ouvrir, plus bas) : la maison de la copie y
+  // ramène (pont_qt.afficher ; le professeur, 19/11/2026, W811 : « on peut pas retourner sur le Home facilement »)
+  const accueil = new URLSearchParams([...params].filter(([k]) => k === "classe" || k === "cle"));
+  if (sujet && accueil.has("classe")) page.accueil = () => { const u = new URL(location.href); u.search = accueil; location.assign(u); };
   // ?classe= : les deux fichiers du tableau, lus pendant que Pyodide-Qt se charge, chez le professeur (sans lui, à côté de la
   // page) ; un fichier illisible vaut absent, le tableau le dit vide plutôt que de ne rien montrer
   const texte = nom => (prof ? prof.racine(nom) : fetch(nom).then(r => r.ok ? r.text() : null)).catch(e => { noter(e); return null; });
@@ -186,11 +190,9 @@ try {
     if (boite && /Pyodide mort|erreur JS|promesse rejetée/.test(boite)) {
       let eleve = "";
       try { eleve = JSON.parse(localStorage.getItem("smartteacher-qt|identite") || "[]").slice(0, 2).join(" "); } catch { /* inconnu */ }
-      const d = new Date(), z = n => String(n).padStart(2, "0");
       const vue = /page : sujet (.*)/.exec(boite)?.[1].split("/").pop().replace(/\.qcm$/, "")
         ?? (/page : accueil/.test(boite) ? "accueil" : "page inconnue");
-      const nom = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}h${z(d.getMinutes())} [${eleve || "élève inconnu"}] ${vue}`;
-      prof.journal_de_classe(classe, nom, boite).catch(e => noter(`journal non déposé : ${e.message ?? e}`));
+      prof.journal(classe, eleve, vue, boite).catch(e => noter(`journal non déposé : ${e.message ?? e}`));
     }
   }
   window.py = await prete;
@@ -199,7 +201,7 @@ try {
   if (classe) {
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
-    const ouvrir = (lien, code, section, essai) => { const u = new URL(location.href); u.search = new URLSearchParams({ sujet: lien, ...(code && { code }), ...(section && { section }), ...(essai && { essai }) }); location.assign(u); };
+    const ouvrir = (lien, code, section, essai) => { const u = new URL(location.href); u.search = new URLSearchParams({ sujet: lien, ...(code && { code }), ...(section && { section }), ...(essai && { essai }), ...Object.fromEntries(accueil) }); location.assign(u); };
     const [echeances_classe, catalogue, empreintes] = await fichiers;
     tableau(classe, echeances_classe, catalogue, ouvrir, empreintes || null, prof || null);
     await page.etat("tableau");
