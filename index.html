@@ -35,6 +35,8 @@
   /* ?journal : le journal de la page par-dessus tout, pour voir sur un téléphone ce qui se passe sans outils de développement */
   #journal { position: fixed; left: 0; right: 0; bottom: 0; max-height: 45vh; overflow: auto; margin: 0; padding: 4px 8px; z-index: 1;
     background: #000c; color: #fff; font: 11px monospace; white-space: pre-wrap; pointer-events: none; }
+  /* par-dessus l'épreuve, il laisse passer la souris ; l'épreuve cachée (accueil, echec()), il se sélectionne et défile */
+  body:has(#epreuve[hidden]) #journal { pointer-events: auto; }
 </style>
 </head>
 <body>
@@ -71,7 +73,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795268972";
+const VERSION = "?v=1795277669";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
