@@ -73,7 +73,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795357375";
+const VERSION = "?v=1795371952";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -188,15 +188,24 @@ try {
   // écrit d'abord ce qu'elle montre, d'où le nom du journal, qui peut être celui d'un sujet ouvert avant (W837).
   const boite = window.qtpy6BoiteNoire?.precedente();
   window.qtpy6BoiteNoire?.noter(classe ? `page : accueil de ${classe}` : `page : sujet ${sujet ?? "choisi sur le disque"}`);
+  const eleve = () => {
+    try { return JSON.parse(localStorage.getItem("smartteacher-qt|identite") || "[]").slice(0, 2).join(" "); } catch { return ""; }
+  };
+  const deposer = (c, vue, texte) => prof.journal(c, eleve(), vue, texte).catch(e => noter(`journal non déposé : ${e.message ?? e}`));
   if (classe && prof) {
     if (boite && /Pyodide mort|erreur JS|promesse rejetée/.test(boite)) {
-      let eleve = "";
-      try { eleve = JSON.parse(localStorage.getItem("smartteacher-qt|identite") || "[]").slice(0, 2).join(" "); } catch { /* inconnu */ }
       const vue = /page : sujet (.*)/.exec(boite)?.[1].split("/").pop().replace(/\.qcm$/, "")
         ?? (/page : accueil/.test(boite) ? "accueil" : "page inconnue");
-      prof.journal(classe, eleve, vue, boite).catch(e => noter(`journal non déposé : ${e.message ?? e}`));
+      deposer(classe, vue, boite);
     }
   }
+  // Un navigateur sans JSPI (qtpy6web.preparer le refuse avant tout chargement) : le professeur le sait tout de suite, dans
+  // Journaux/<classe>/, avec le navigateur ; l'élève, lui, lit ce qu'il doit faire (echec). Élève du 22/11/2026, W925.
+  prete.catch(e => {
+    const c = classe || accueil.get("classe");
+    if (e?.name === "NavigateurSansJSPI" && prof && c)
+      deposer(c, classe ? "accueil" : sujet.split("/").pop().replace(/\.qcm$/, ""), `${e.message}\nnavigateur : ${navigator.userAgent}`);
+  });
   window.py = await prete;
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
   garder(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
