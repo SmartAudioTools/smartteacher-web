@@ -73,7 +73,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795398283";
+const VERSION = "?v=1795421089";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -202,11 +202,12 @@ try {
       deposer(classe, vue, boite);
     }
   }
-  // Un navigateur sans JSPI (qtpy6web.preparer le refuse avant tout chargement) : le professeur le sait tout de suite, dans
-  // Journaux/<classe>/, avec le navigateur ; l'élève, lui, lit ce qu'il doit faire (echec). Élève du 22/11/2026, W925.
+  // Un navigateur sans JSPI (qtpy6web.preparer le refuse avant tout chargement) ou un fichier de Pyodide qui ne se télécharge
+  // pas malgré les nouveaux essais : le professeur le sait tout de suite, dans Journaux/<classe>/, avec le navigateur ;
+  // l'élève, lui, lit ce qu'il doit faire (echec). Élèves du 22/11/2026, W925 et W955.
   prete.catch(e => {
     const c = classe || accueil.get("classe");
-    if (e?.name === "NavigateurSansJSPI" && prof && c)
+    if (["NavigateurSansJSPI", "TelechargementImpossible"].includes(e?.name) && prof && c)
       deposer(c, classe ? "accueil" : sujet.split("/").pop().replace(/\.qcm$/, ""), `${e.message}\nnavigateur : ${navigator.userAgent}`);
   });
   window.py = await prete;
