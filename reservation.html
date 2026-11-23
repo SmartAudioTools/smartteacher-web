@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Réservation des tours</title>
+<title>Réservation des ordinateurs et des tablettes</title>
 <!-- L'agenda des tours (Reservation/, Apps Script) encadré dans une page à nous : essai pour ne plus voir le bandeau
      « Cette application a été créée par un utilisateur de Google Apps Script » (DONE, « Réservation des tours : page
      GitHub Pages », 09/10/2026). doGet autorise l'encadrement (XFrameOptionsMode.ALLOWALL). -->
@@ -26,7 +26,7 @@
 function ouvrir() {
   document.querySelectorAll('iframe').forEach(f => f.remove());
   const f = document.createElement('iframe');
-  f.title = "Réservation des tours d'ordinateurs";
+  f.title = "Réservation des ordinateurs et des tablettes";
   f.src = 'https://script.google.com/macros/s/AKfycbx1YhW7btLQNYPbTXz10k7chPFXGjCDoaoT2SFduRukQXy-ckxXCRhDggXD0nIk50AuxA/exec?v=' + Date.now()
     // Lancé depuis l'écran d'accueil : la page ne propose plus de l'y mettre (19/11/2026).
     + (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true ? '&appli=1' : '');
