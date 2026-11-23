@@ -73,7 +73,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795394482";
+const VERSION = "?v=1795398283";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -141,6 +141,7 @@ try {
     page.echeances = await echeances;
     page.amenagements = await amenagements;
     page.jugement = await jugement;
+    page.creneaux = await creneaux;
     page.identites = (await identites) || null;
     $("#accueil").hidden = true;
     $("#epreuve").hidden = false;
@@ -162,6 +163,8 @@ try {
   const amenagements = !classe && texte("amenagements.json");
   // et la clé du modèle qui note (cle_jugement), qui prime sur celle du sujet : changer de clé ne redéploie aucun sujet (W782)
   const jugement = !classe && texte("jugement.txt");
+  // et les cours de chaque classe (echeances.CRENEAUX) : une révision n'est sous anti-triche que pendant ceux de sa classe
+  const creneaux = !classe && texte("creneaux.csv");
   // et le fichier d'empreintes, où l'accueil reconnaît l'élève à son mot de passe (lecteur.Accueil.identifier ; le tableau
   // le lit avec ses deux fichiers)
   const identites = !classe && prof && prof.identites_lire().catch(e => { noter(e); return null; });
