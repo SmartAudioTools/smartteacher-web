@@ -152,9 +152,11 @@ export function professeur(cle) {
     // Un sujet du dossier, en octets : rien d'autre qu'un .qcm ou un bilan d'élève (.report, bilans.py fichiers) de la racine ou
     // d'un niveau, ou un PDF de cours d'un niveau (les boutons « Cours » du tableau, tableau_eleves.ouvrir_cours ; refusé
     // jusqu'au 08/11/2026, le professeur : « les boutons de cours (pdf et diaporama) ne trouvent pas les cours »), quel que
-    // soit le paramètre de la page.
+    // soit le paramètre de la page. Aussi le témoin de présence d'une copie d'un niveau (« <sujet> [<élève>]….etat.json »,
+    // ``presence``), d'où l'accueil tire les jauges et la fin de chaque TP (tableau_eleves.lire_temoins, [APE-24]) : refusé
+    // jusqu'au 23/11/2026 ([L-55], 80 « chemin refusé » dans les journaux des élèves) ; aucun autre .json.
     async fichier(sujet) {
-      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.(qcm|report)$|^${NIVEAU}.+\\.pdf$`, sujet));
+      const r = await lire("/" + sur(`^(${NIVEAU}.+/)?[^/\\\\]+\\.(qcm|report)$|^${NIVEAU}.+\\.pdf$|^${NIVEAU}${COPIE.slice(2)}etat\\.json$`, sujet));
       if (!r) throw new Error(sujet + " introuvable dans le dossier Dropbox du professeur");
       return new Uint8Array(await r.arrayBuffer());
     },
@@ -208,7 +210,7 @@ export function professeur(cle) {
     },
 
     // Le témoin de présence de l'élève (pont_qt.envoyer_presence), à côté de sa copie : un petit JSON que le plan de classe du
-    // professeur lit par l'API Dropbox (plan_de_classe/suivi.py, longpoll). Jamais lu par la page.
+    // professeur lit par l'API Dropbox (plan_de_classe/suivi.py, longpoll), et que l'accueil de l'élève relit par ``fichier``.
     async presence(chemin, texte) {
       await appel("files/upload", { path: sur(COPIE + "etat\\.json$", chemin), mode: "overwrite", mute: true }, texte);
     },
