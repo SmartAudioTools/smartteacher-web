@@ -34,6 +34,9 @@ export async function preparer(conteneur, { sur_ligne, progres, indexURL = "./py
     sur_ligne,
     progres,
     tailles,
+    // QtNetwork, importé dès le chargement (modele.py, horloge.py) : préchargé, il ne demande pas la suspension que Safari
+    // a refusée au démarrage (iPhone iOS 27.0.1, 25/11/2026, [L-61]) ; un tel import ajouté au lecteur s'ajoute ici
+    qt: ["Network"],
     module: "pont_qt",  // importé par preparer en rendant la main à la page : le cercle d'avancement continue de tourner
   });
   pont = py.pyimport("pont_qt");
