@@ -73,7 +73,7 @@
 const PYODIDE_QT = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const PYODIDE = "https://smartaudiotools.github.io/qtpy6/pyodide-qt/";
 const HOTE = "https://smartteacher.smartaudiotools.com/";
-const VERSION = "?v=1795718024";
+const VERSION = "?v=1795719719";
 const DROPBOX = "b244bHpmeG80bDc5aTZnIGttZV9RSjh4dmMwQUFBQUFBQUFBQVFzWlg1dkRYdnJSbktjUzhpdHZseTZDSEN6TW9NWk1UZ0oyNGh2bFNjLVk=";
 const ROUES_PYODIDE = [PYODIDE + "sqlite3-1.0.0-cp313-cp313-pyodide_2025_0_wasm32.whl"];
 window.etat = "en cours";
@@ -105,6 +105,26 @@ function message(texte, erreur = false) {
   $("#message").classList.toggle("erreur", erreur);
   $("#message").classList.toggle("attente", !erreur && texte.endsWith("…"));
 }
+
+// Une préparation qui échoue sur une page servie par le service worker : son cache est peut-être abîmé (profil Firefox dont
+// le Cache Storage rend des entrées illisibles : chaque fichier gardé en « NetworkError », « error loading dynamically
+// imported module », élèves du 26/11/2026, W1051). Les caches « smartteacher?… » ne tiennent que des fichiers publiés,
+// retéléchargeables (rien de l'élève : identité et copies sont dans localStorage et IndexedDB) : ils sont effacés, le
+// service worker désinscrit, la page rechargée UNE fois (sessionStorage garde contre la boucle). Avant l'épreuve seulement.
+const REPARER = "smartteacher-cache-repare";
+async function reparer_le_cache() {
+  if (!navigator.serviceWorker?.controller || !window.caches) return false;
+  // hors ligne, le cache est peut-être sain et seul à servir la page : il ne s'efface que si le réseau répond
+  try { if (!(await fetch(location.href, { cache: "no-store" })).ok) return false; } catch { return false; }
+  try { if (sessionStorage.getItem(REPARER)) return false; sessionStorage.setItem(REPARER, "1"); } catch { return false; }
+  try {
+    for (const cle of await caches.keys()) if (cle.startsWith("smartteacher?")) await caches.delete(cle);
+    await (await navigator.serviceWorker.getRegistration())?.unregister();
+  } catch (e) { noter(`cache non effacé : ${e?.message ?? e}`); }
+  location.reload();
+  return true;
+}
+let preparee = false;
 
 $("#identite").onsubmit = e => e.preventDefault();  // Entrée dans la page ne la recharge pas
 try {
@@ -211,6 +231,8 @@ try {
       deposer(c, classe ? "accueil" : sujet.split("/").pop().replace(/\.qcm$/, ""), `${e.message}\nnavigateur : ${navigator.userAgent}`);
   });
   window.py = await prete;
+  preparee = true;
+  try { sessionStorage.removeItem(REPARER); } catch {}
   const [qt, hote] = [PYODIDE_QT, HOTE].map(p => new URL(p, location.href).href);
   garder(u => u.startsWith(qt) || u.startsWith(hote) && /\.(m?js|zip|whl|json|br)(\?|$)/.test(u));  // pas les sujets ni les cours
   if (classe) {
@@ -227,7 +249,7 @@ try {
     $("[name=fichier]").onchange = async e => commencer(new Uint8Array(await e.target.files[0].arrayBuffer()), e.target.files[0].name);
   }
 } catch (erreur) {
-  echec(erreur);
+  if (preparee || !await reparer_le_cache()) echec(erreur);
 }
 </script>
 </body>
